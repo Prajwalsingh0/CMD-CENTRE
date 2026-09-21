@@ -1,0 +1,36 @@
+# ---- Backend ----
+backend/target/
+backend/data/
+*.class
+*.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
+
+# ---- Frontend ----
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/coverage/
+*.tsbuildinfo
+
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- IDE / OS ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs / temp ----
+*.log
+logs/
