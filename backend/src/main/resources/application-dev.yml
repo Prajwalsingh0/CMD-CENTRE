@@ -15,4 +15,5 @@ spring:
 
 app:
   seed:
-    demo-data: ${APP_SEED_DEMO:true}
+    # Opt-in demo dataset for screenshots/first-run walkthroughs. See DemoDataSeeder.
+    demo-data: ${APP_SEED_DEMO:false}

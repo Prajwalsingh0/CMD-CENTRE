@@ -133,6 +133,14 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Unit tests (*Test) and HTTP/integration tests (*IT) both run under `mvn test`, so a
+               single command proves the whole system the way the Definition of Done requires. -->
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*IT.java</include>
+          </includes>
+        </configuration>
       </plugin>
     </plugins>
   </build>
