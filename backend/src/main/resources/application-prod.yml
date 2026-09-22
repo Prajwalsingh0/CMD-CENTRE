@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/commandcenter}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:commandcenter}
+    password: ${DB_PASSWORD:change-me-in-every-real-environment}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+app:
+  seed:
+    demo-data: false
+
+logging:
+  level:
+    root: INFO
+    com.aicommandcenter: INFO

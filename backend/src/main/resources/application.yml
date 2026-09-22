@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: ai-command-center
+  profiles:
+    default: dev
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 12MB
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+app:
+  jwt:
+    # Development default only. Every real environment MUST override JWT_SECRET.
+    # Minimum 32 bytes or the application refuses to start.
+    secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-0123456789abcdef}
+    issuer: ai-command-center
+    access-token-minutes: 120
+  storage:
+    location: ${APP_STORAGE_LOCATION:./data/uploads}
+    max-file-size-bytes: ${APP_MAX_FILE_SIZE_BYTES:8388608}
+    allowed-extensions: pdf,txt,md,markdown
+    allowed-content-types: application/pdf,text/plain,text/markdown,text/x-markdown
+  ai:
+    # local | openai  (local is deterministic and needs no credentials)
+    provider: ${AI_PROVIDER:local}
+    open-ai:
+      base-url: ${AI_BASE_URL:https://api.openai.com/v1}
+      api-key: ${AI_API_KEY:}
+      model: ${AI_MODEL:gpt-4o-mini}
+      timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+    embedding-dimensions: ${AI_EMBEDDING_DIMENSIONS:256}
+  research:
+    web-enabled: ${RESEARCH_WEB_ENABLED:true}
+    http-timeout-seconds: ${RESEARCH_TIMEOUT_SECONDS:12}
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173}
+  seed:
+    demo-data: ${APP_SEED_DEMO:false}
+
+logging:
+  level:
+    root: INFO
+    com.aicommandcenter: INFO
+    org.hibernate.SQL: WARN
