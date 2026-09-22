@@ -1,0 +1,73 @@
+# AI Command Center — local stack.
+#
+#   docker compose up --build
+#   → API  http://localhost:8080
+#   → App  http://localhost:5173
+#
+# The defaults below are development values so the stack starts with a single command.
+# BEFORE exposing this to anything other than localhost, set JWT_SECRET and DB_PASSWORD
+# (for example in a .env file next to this file, or as real environment variables).
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cmdcentre-db
+    environment:
+      POSTGRES_DB: commandcenter
+      POSTGRES_USER: commandcenter
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-local-dev-password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U commandcenter -d commandcenter"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: cmdcentre-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://db:5432/commandcenter
+      DB_USERNAME: commandcenter
+      DB_PASSWORD: ${DB_PASSWORD:-local-dev-password}
+      # Must be at least 32 bytes or the application refuses to start.
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-me-0123456789abcdef}
+      AI_PROVIDER: ${AI_PROVIDER:-local}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      APP_STORAGE_LOCATION: /app/data/uploads
+      APP_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      APP_SEED_DEMO: ${APP_SEED_DEMO:-false}
+    volumes:
+      - uploads:/app/data/uploads
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: cmdcentre-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "5173:80"
+
+volumes:
+  db-data:
+  uploads:
