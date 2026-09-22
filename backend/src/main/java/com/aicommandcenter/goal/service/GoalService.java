@@ -100,9 +100,13 @@ public class GoalService {
     @Transactional
     public GoalResponse refreshStatus(Long userId, Long goalId) {
         Goal goal = require(userId, goalId);
-        long total = taskRepository.countByUserIdAndGoalId(userId, goalId);
-        long completed = taskRepository.countByUserIdAndGoalIdAndStatus(userId, goalId, TaskStatus.COMPLETED);
-        if (total > 0 && total == completed && goal.getStatus() == GoalStatus.ACTIVE) {
+        List<Task> tasks = taskRepository.findAllByUserIdAndGoalId(userId, goalId);
+        long completed = tasks.stream().filter(task -> task.getStatus() == TaskStatus.COMPLETED).count();
+        long cancelled = tasks.stream().filter(task -> task.getStatus() == TaskStatus.CANCELLED).count();
+        // Cancelled tasks leave the denominator, exactly as they do in progressPercent, so the
+        // goal can legitimately reach 100% without its cancelled work blocking closure.
+        long countable = tasks.size() - cancelled;
+        if (countable > 0 && completed == countable && goal.getStatus() == GoalStatus.ACTIVE) {
             goal.setStatus(GoalStatus.COMPLETED);
         }
         return toResponse(goalRepository.save(goal));

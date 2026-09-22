@@ -23,7 +23,7 @@ public final class TextAnalysis {
     private static final int MIN_SENTENCE_CHARS = 24;
     private static final int MAX_SENTENCE_CHARS = 600;
 
-    private static final Set<String> STOPWORDS = Set.of(
+    private static final Set<String> STOPWORDS = java.util.Collections.unmodifiableSet(new java.util.HashSet<>(List.of(
             "the", "and", "for", "are", "but", "not", "you", "your", "with", "this", "that", "these", "those",
             "from", "have", "has", "had", "was", "were", "will", "would", "should", "could", "can", "may",
             "into", "over", "under", "about", "after", "before", "between", "while", "when", "where", "which",
@@ -31,7 +31,9 @@ public final class TextAnalysis {
             "some", "such", "only", "own", "same", "than", "too", "very", "just", "also", "its", "it's", "them",
             "they", "their", "there", "here", "then", "them", "out", "off", "our", "ours", "his", "her", "she",
             "him", "he", "been", "being", "does", "did", "doing", "done", "use", "used", "using", "one", "two",
-            "get", "got", "make", "made", "like", "well", "much", "many", "you'll", "we'll", "etc", "via");
+            "get", "got", "make", "made", "like", "well", "much", "many", "you'll", "we'll", "etc", "via",
+            "a", "an", "as", "at", "be", "by", "do", "if", "in", "is", "it", "its", "no", "of", "on", "or",
+            "so", "to", "up", "us", "we", "am", "per", "new", "let", "now")));
 
     private TextAnalysis() {
     }
@@ -67,13 +69,31 @@ public final class TextAnalysis {
         }
         Matcher matcher = WORD.matcher(text.toLowerCase(Locale.ROOT));
         while (matcher.find()) {
-            String token = matcher.group();
+            String token = trimEdges(matcher.group());
             if (token.length() < 2 || STOPWORDS.contains(token)) {
                 continue;
             }
             tokens.add(token);
         }
         return tokens;
+    }
+
+    // Strips leading and trailing separators so sentence punctuation never becomes part of a
+    // token: "jvm." must normalise to "jvm" while "node.js" must keep its internal dot.
+    private static String trimEdges(String token) {
+        int start = 0;
+        int end = token.length();
+        while (start < end && isEdgeSeparator(token.charAt(start))) {
+            start++;
+        }
+        while (end > start && isEdgeSeparator(token.charAt(end - 1))) {
+            end--;
+        }
+        return token.substring(start, end);
+    }
+
+    private static boolean isEdgeSeparator(char value) {
+        return value == '.' || value == '-';
     }
 
     /** Token frequencies, most frequent first; ties broken alphabetically for determinism. */
@@ -156,9 +176,9 @@ public final class TextAnalysis {
     public static List<String> questions(String text, int limit) {
         List<String> keywords = topKeywords(text, limit);
         List<String> stems = List.of(
-                "Explain how %s is used in this context and why it matters.",
+                "Explain how %s is used in this context and why does it matter?",
                 "What trade-offs should be considered when applying %s?",
-                "Describe a failure mode involving %s and how you would diagnose it.",
+                "Describe a failure mode involving %s and how would you diagnose it?",
                 "How would you demonstrate hands-on experience with %s in an interview?",
                 "What is the difference between %s and the closest alternative?");
         List<String> result = new ArrayList<>();

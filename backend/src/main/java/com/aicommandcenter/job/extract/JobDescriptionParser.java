@@ -32,9 +32,13 @@ public final class JobDescriptionParser {
     private static final Pattern COMPANY_AT = Pattern.compile(
             "\\bat\\s+([A-Z][A-Za-z0-9&.'\\-]*(?:\\s+[A-Z][A-Za-z0-9&.'\\-]*){0,3})");
     private static final Pattern TITLE_ROLE = Pattern.compile(
-            "\\b((?:senior|junior|lead|principal|staff)?\\s*(?:java|backend|back-end|full[- ]stack|software|frontend|"
-                    + "front-end|data|devops|cloud|platform|qa|test|ai|ml|machine learning)?\\s*"
-                    + "(?:engineer|developer|architect|analyst|scientist|consultant|manager|intern))\\b",
+            "\\b((?:senior|junior|lead|principal|staff)?\\s*"
+                    + "(?:java|python|javascript|typescript|golang|go|rust|ruby|php|kotlin|scala|c\\+\\+|c#|csharp|"
+                    + "android|ios|mobile|web|node|react|angular|vue|dotnet|\\.net|salesforce|sap|"
+                    + "backend|back-end|frontend|front-end|full[- ]stack|software|data|devops|cloud|platform|"
+                    + "security|network|database|qa|test|ai|ml|machine learning|site reliability)?\\s*"
+                    + "(?:engineer|developer|programmer|architect|analyst|scientist|consultant|manager|administrator|"
+                    + "specialist|intern|lead))\\b",
             Pattern.CASE_INSENSITIVE);
 
     private static final List<String> REQUIRED_HEADINGS = List.of(
@@ -61,7 +65,16 @@ public final class JobDescriptionParser {
         String preferredBlock = sections.getOrDefault(Section.PREFERRED, new StringBuilder()).toString();
         String responsibilityBlock = sections.getOrDefault(Section.RESPONSIBILITY, new StringBuilder()).toString();
 
-        List<String> required = new ArrayList<>(SkillDictionary.findSkills(requiredBlock));
+        // "Requirements" and "Key responsibilities" both describe capability the role needs, so both
+        // contribute to the required set. "Preferred" is separate by definition and never overlaps it.
+        List<String> requiredBlockSkills = SkillDictionary.findSkills(requiredBlock);
+        List<String> responsibilitySkills = SkillDictionary.findSkills(responsibilityBlock);
+        List<String> required = new ArrayList<>(requiredBlockSkills);
+        for (String skill : responsibilitySkills) {
+            if (!required.contains(skill)) {
+                required.add(skill);
+            }
+        }
         List<String> requiredScope = List.copyOf(required);
         List<String> preferred = SkillDictionary.findSkills(preferredBlock).stream()
                 .filter(skill -> !requiredScope.contains(skill))
