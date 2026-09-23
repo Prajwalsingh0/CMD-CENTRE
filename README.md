@@ -342,7 +342,7 @@ default. See [.env.example](.env.example) for the annotated list.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `JWT_SECRET` | dev-only value | HS256 signing key. **Must be ≥ 32 bytes or startup fails.** |
+| `JWT_SECRET` | required outside dev | HS256 signing key. There is **no** usable default: the `dev` profile supplies a local-only key, and any other profile fails to start if the variable is missing or shorter than 32 bytes. |
 | `AI_PROVIDER` | `local` | `local` (offline, deterministic) or `openai`. |
 | `AI_API_KEY` | empty | Required only when `AI_PROVIDER=openai`; startup fails without it. |
 | `AI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible base URL. |
@@ -415,6 +415,9 @@ only (JDBC URL `jdbc:h2:mem:cmdcentre`, user `sa`, empty password).
 cd backend && mvn test     # unit tests and HTTP integration tests
 cd frontend && npm run test
 ```
+
+The suites are independent and offline. Backend: 118 tests (56 unit, 62 HTTP integration).
+Frontend: 13 tests.
 
 `mvn test` runs both `*Test` (unit) and `*IT` (full-stack MockMvc against H2) suites, so one
 command proves the whole backend.
@@ -541,7 +544,16 @@ cmd-centre/
 │       │   └── user/         users, profile, skills
 │       ├── main/resources/   application*.yml, db/migration
 │       └── test/java/        unit tests and MockMvc integration tests
-├── frontend/                 React + TypeScript + Vite SPA
+├── frontend/
+│   ├── src/
+│   │   ├── api/          typed client + one function per endpoint + DTO types
+│   │   ├── auth/         session provider and the protected-route gate
+│   │   ├── components/   shell, command bar, toasts, modal, badges, states
+│   │   ├── hooks/        useAsync (one request, one state) and the data-refresh event
+│   │   ├── pages/        one file per route
+│   │   └── test/         API client, auth gate, command bar and page tests
+│   ├── Dockerfile        multi-stage build served by nginx
+│   └── nginx.conf        static assets + /api proxy + security headers
 ├── docs/
 │   ├── ARCHITECTURE.md       decisions, data model, frozen constraints
 │   ├── API.md                endpoint reference

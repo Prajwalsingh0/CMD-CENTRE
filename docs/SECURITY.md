@@ -201,3 +201,39 @@ Storage properties:
    duration of extraction; the 8 MB ceiling keeps this bounded.
 6. **Embedding vectors are stored as plain JSON text.** They contain no user secrets beyond
    derived features of the user's own documents.
+
+## 10. Second-pass adversarial review and its disposition
+
+The backend was then re-reviewed adversarially by an independent pass that read every source file,
+both Flyway/entity models and all three profiles, and tried to break four areas: object-level
+authorisation, the AI command pipeline, the upload path, and retrieval/prompt injection.
+
+**Areas that held.** Object-level authorisation could not be broken: every `require()` filters by
+owner, a foreign row and a missing row are indistinguishable (both `404 RESOURCE_NOT_FOUND`), every
+`findAllById` batch result is re-filtered by owner, `resolveGoal` enforces ownership, and
+`resolveScope` rejects foreign document ids instead of silently dropping them. The command pipeline
+is structurally closed. Retrieval is owner-scoped *before* ranking, and document text has no path to
+a tool, a shell or SQL — prompt injection is confined to the answer text.
+
+**Findings and what was done about each.**
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| F1 | HIGH | A working HS256 key was committed as the default in `application.yml`, and `prod` inherited it, so a deployment that forgot `JWT_SECRET` would start with a publicly known signing key. | **Fixed.** `application.yml` now resolves `${JWT_SECRET:}` with no usable default; the development-only key moved into `application-dev.yml`; `prod` declares it explicitly and `JwtService` refuses to start on an empty or short secret. The previously committed value must be treated as compromised and rotated. |
+| F2 | MEDIUM | `JwtService.parse` hard-coded `enabled=true` and never loaded the user, so disabling or deleting an account did not revoke its token for up to 120 minutes. | **Fixed.** `parse` now reloads the subject and requires an enabled row, making suspension take effect on the next request. Documented trade-off: one indexed lookup per authenticated call. |
+| F3 | MEDIUM | No rate limiting, lockout or quota on login, `/api/ai/command` or uploads. | **Accepted, documented.** A correct implementation belongs at the ingress, not in-process; the bundled nginx caps the request body and the README lists it as a deployment step. |
+| F4 | MEDIUM | JSON bodies were buffered by Jackson before Bean Validation ran, and the multipart limits do not apply to `application/json`. | **Fixed.** `RequestSizeFilter` rejects `application/json` bodies over 1 MB with a `413` before deserialisation, and the dead, unbounded `ChatRequest.history` field was removed. Residual gap (chunked encoding without `Content-Length`) is stated in the filter's Javadoc. |
+| F5 | MEDIUM | Each retrieval decodes the caller's whole corpus twice per chunk, with no cap on chunk count. | **Accepted, documented.** Correct for the documented scale and already isolated behind `VectorStore`; the README's future-work list names pgvector as the fix. |
+| F6 | MEDIUM | `/h2-console/**` was permitted in every profile and enabled by the default `dev` profile with a blank password. | **Fixed.** The console route and the relaxed frame options are now applied only when the `dev` profile is active; `prod` disables the console and denies framing. |
+| F7 | LOW | The multi-write plan tool was not transactional, so a failure mid-loop could leave rows behind while reporting `REJECTED`. | **Fixed.** The tool call now runs inside a `TransactionTemplate`, so it commits entirely or not at all; the activity row is written afterwards, outside that transaction, so the audit trail survives a rollback. |
+| F8 | LOW | `POST /api/auth/register` revealed whether an address is registered. | **Accepted, documented.** Changing it needs an email-verification flow to stay honest; noted in the limitations. Login itself remains indistinguishable. |
+| F9 | LOW | Numeric arguments were coerced by stripping non-digits, so `"1e9"` became `19` and `"3 tasks"` became `3`. | **Fixed.** `CommandArgs` now requires a strict whole number and rejects anything else. |
+| F10 | LOW | The upload validator inspected only the head of the stream, so a polyglot passed validation. | **Accepted, documented.** Contained: extraction failures are caught and the document is marked `FAILED` rather than served. The Javadoc and the limitations list now state the sniff window precisely instead of over-claiming. |
+| F11 | INFO | Some chunk-repository methods take a bare document id with no owner filter. | **Accepted, noted.** Every current caller gates on ownership first; the observation is recorded so a future change does not rely on that. |
+| F12 | INFO | LIKE metacharacters were not escaped in task search, so `%` matched everything. | **Fixed.** Search input escapes `\`, `%` and `_` and the predicates declare an escape character. |
+| F13 | INFO | Long filenames could be truncated mid-surrogate-pair; activity rows could carry control characters. | **Accepted, documented.** Both are cosmetic robustness notes with no exploit path. |
+
+The review also examined PDFBox-on-untrusted-input (parser failures are contained, page count and
+output size are capped) and confirmed that no endpoint ever executes a process or passes file
+content to a shell.
+
