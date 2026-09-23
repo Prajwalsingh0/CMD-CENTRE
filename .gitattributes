@@ -1,0 +1,13 @@
+# Keep every text file LF in the repository regardless of the developer's platform, so a
+# Windows checkout and a Linux CI runner produce identical diffs.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.jar binary
