@@ -3,13 +3,23 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/commandcenter}
     driver-class-name: org.postgresql.Driver
     username: ${DB_USERNAME:commandcenter}
-    password: ${DB_PASSWORD:change-me-in-every-real-environment}
+    password: ${DB_PASSWORD:change-me-before-deploying}
   jpa:
     hibernate:
       ddl-auto: validate
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+  h2:
+    console:
+      # Never available outside local development.
+      enabled: false
 
 app:
+  jwt:
+    # Deliberately no default. `application.yml` resolves app.jwt.secret from ${JWT_SECRET:} which
+    # is empty here, and JwtService refuses to start on a secret shorter than 32 bytes — so a prod
+    # deployment that forgets the variable fails loudly instead of signing with a published key.
+    #   generate one with:  openssl rand -base64 48
+    secret: ${JWT_SECRET:}
   seed:
     demo-data: false
 

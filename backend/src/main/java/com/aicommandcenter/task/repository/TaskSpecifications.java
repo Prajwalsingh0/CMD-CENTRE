@@ -7,9 +7,13 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 /** Composable predicates for the task list endpoint. Every predicate is scoped to the owner. */
 public final class TaskSpecifications {
+
+    /** Escape character used by the LIKE predicates so user input cannot act as a wildcard. */
+    private static final char ESCAPE = '\\';
 
     private TaskSpecifications() {
     }
@@ -48,10 +52,15 @@ public final class TaskSpecifications {
         if (text == null || text.isBlank()) {
             return null;
         }
-        String pattern = "%" + text.trim().toLowerCase() + "%";
+        // Wildcards are escaped so a search box cannot be turned into a "match everything" scan.
+        String escaped = text.trim().toLowerCase(Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        String pattern = "%" + escaped + "%";
         return (root, query, cb) -> cb.or(
-                cb.like(cb.lower(root.get("title")), pattern),
-                cb.like(cb.lower(cb.coalesce(root.get("description"), "")), pattern),
-                cb.like(cb.lower(cb.coalesce(root.get("tags"), "")), pattern));
+                cb.like(cb.lower(root.get("title")), pattern, ESCAPE),
+                cb.like(cb.lower(cb.coalesce(root.get("description"), "")), pattern, ESCAPE),
+                cb.like(cb.lower(cb.coalesce(root.get("tags"), "")), pattern, ESCAPE));
     }
 }

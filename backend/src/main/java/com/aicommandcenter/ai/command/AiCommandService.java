@@ -8,6 +8,7 @@ import com.aicommandcenter.exception.BadRequestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,12 @@ import java.util.Map;
  *   <li>A genuine domain failure (resource not found, conflict) is recorded as {@code FAILED} and
  *       then propagated, so the HTTP status stays truthful.</li>
  * </ul>
+ *
+ * <p>The tool call itself runs inside a programmatic transaction. That is what makes "REJECTED means
+ * nothing was written" a structural guarantee rather than an accident of statement ordering: a
+ * multi-write tool such as the plan generator commits all of its rows or none of them, while the
+ * activity row is written afterwards, outside that transaction, so the audit trail survives a
+ * rollback.</p>
  */
 @Service
 public class AiCommandService {
@@ -35,17 +42,20 @@ public class AiCommandService {
     private final CommandToolRegistry registry;
     private final AiActivityService activityService;
     private final AiService aiService;
+    private final TransactionTemplate transactionTemplate;
 
     public AiCommandService(HeuristicCommandParser heuristicParser,
                             LlmCommandParser llmParser,
                             CommandToolRegistry registry,
                             AiActivityService activityService,
-                            AiService aiService) {
+                            AiService aiService,
+                            TransactionTemplate transactionTemplate) {
         this.heuristicParser = heuristicParser;
         this.llmParser = llmParser;
         this.registry = registry;
         this.activityService = activityService;
         this.aiService = aiService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     public CommandResultResponse execute(Long userId, String command) {
@@ -69,7 +79,11 @@ public class AiCommandService {
         try {
             CommandArgs args = new CommandArgs(parsed.arguments());
             args.rejectUnknown(tool.allowedArguments());
-            ToolResult result = tool.execute(userId, args);
+            // Argument validation happens outside the transaction: a bad argument must not open one.
+            ToolResult result = transactionTemplate.execute(status -> tool.execute(userId, args));
+            if (result == null) {
+                throw new IllegalStateException("Command tool " + tool.intent() + " produced no result");
+            }
             AiActivityResponse activity = activityService.record(userId, trimmed, parsed.intent().name(),
                     AiActivityService.ActivityStatus.SUCCESS, result.summary());
             return new CommandResultResponse(activity.id(), trimmed, parsed.intent().name(), "SUCCESS",

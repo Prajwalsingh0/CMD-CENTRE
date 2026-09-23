@@ -9,6 +9,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -84,7 +87,30 @@ class AiCommandServiceTest {
                 ArgumentMatchers.anyString()))
                 .thenReturn(new com.aicommandcenter.ai.activity.AiActivityResponse(
                         7L, "cmd", "CREATE_TASK", "SUCCESS", "summary", java.time.Instant.now()));
-        service = new AiCommandService(heuristicParser, llmParser, registry, activityService, aiService);
+        service = new AiCommandService(heuristicParser, llmParser, registry, activityService, aiService,
+                noOpTransactionTemplate());
+    }
+
+    /** Real TransactionTemplate over a no-op manager: the test only needs the control flow. */
+    private static TransactionTemplate noOpTransactionTemplate() {
+        return new TransactionTemplate(new AbstractPlatformTransactionManager() {
+            @Override
+            protected Object doGetTransaction() {
+                return new Object();
+            }
+
+            @Override
+            protected void doBegin(Object transaction, org.springframework.transaction.TransactionDefinition definition) {
+            }
+
+            @Override
+            protected void doCommit(DefaultTransactionStatus status) {
+            }
+
+            @Override
+            protected void doRollback(DefaultTransactionStatus status) {
+            }
+        });
     }
 
     @Test

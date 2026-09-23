@@ -10,10 +10,16 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
   h2:
     console:
+      # Convenience for local development only. `dev` is the default profile, so this also means
+      # the console must never be reachable from outside the machine — see docs/SECURITY.md.
       enabled: true
       path: /h2-console
 
 app:
+  jwt:
+    # A development-only key, kept out of application.yml so that no other profile can inherit it.
+    # The `prod` profile has no default at all and refuses to start without JWT_SECRET.
+    secret: ${JWT_SECRET:dev-only-local-signing-key-change-me-0123456789}
   seed:
     # Opt-in demo dataset for screenshots/first-run walkthroughs. See DemoDataSeeder.
     demo-data: ${APP_SEED_DEMO:false}

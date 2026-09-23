@@ -72,12 +72,8 @@ public class CommandArgs {
         if (value == null) {
             return null;
         }
-        try {
-            long parsed = Long.parseLong(value.replaceAll("[^0-9-]", ""));
-            return parsed <= 0 ? null : parsed;
-        } catch (NumberFormatException ex) {
-            throw new BadRequestException("INVALID_ARGUMENT", "'" + key + "' must be a number");
-        }
+        long parsed = parseWholeNumber(key, value, 15);
+        return parsed <= 0 ? null : parsed;
     }
 
     public int optionalInt(String key, int fallback, int min, int max) {
@@ -85,15 +81,29 @@ public class CommandArgs {
         if (value == null) {
             return fallback;
         }
-        try {
-            int parsed = Integer.parseInt(value.replaceAll("[^0-9-]", ""));
-            if (parsed < min || parsed > max) {
-                throw new BadRequestException("INVALID_ARGUMENT",
-                        "'" + key + "' must be between " + min + " and " + max);
-            }
-            return parsed;
-        } catch (NumberFormatException ex) {
+        long parsed = parseWholeNumber(key, value, 9);
+        if (parsed < min || parsed > max) {
+            throw new BadRequestException("INVALID_ARGUMENT",
+                    "'" + key + "' must be between " + min + " and " + max);
+        }
+        return (int) parsed;
+    }
+
+    /**
+     * Strict whole-number parsing. Anything that is not digits (optionally leading {@code -}) is
+     * refused rather than silently stripped: coercing {@code "1e9"} to {@code 19} or {@code "3
+     * tasks"} to {@code 3} would let a hostile model act on a different value than the user wrote.
+     */
+    private static long parseWholeNumber(String key, String value, int maxDigits) {
+        String trimmed = value.trim();
+        String digits = trimmed.startsWith("-") ? trimmed.substring(1) : trimmed;
+        if (digits.isEmpty() || digits.length() > maxDigits || !digits.chars().allMatch(Character::isDigit)) {
             throw new BadRequestException("INVALID_ARGUMENT", "'" + key + "' must be a whole number");
+        }
+        try {
+            return Long.parseLong(trimmed);
+        } catch (NumberFormatException ex) {
+            throw new BadRequestException("INVALID_ARGUMENT", "'" + key + "' is out of range");
         }
     }
 

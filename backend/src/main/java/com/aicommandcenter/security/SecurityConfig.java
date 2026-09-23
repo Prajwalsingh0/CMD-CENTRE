@@ -6,11 +6,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -23,16 +24,26 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
+/**
+ * Stateless bearer-token security.
+ *
+ * <p>Profile-aware on purpose: the H2 console is a development convenience that allows arbitrary
+ * SQL and, through H2's Java aliases, code execution inside the JVM. It is therefore permitted
+ * <em>only</em> in the {@code dev} profile, and the relaxed frame options it needs are applied only
+ * there too. Every other profile denies framing and has no console route at all.</p>
+ */
 @Configuration
 @EnableConfigurationProperties(CorsProperties.class)
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
     private final CorsProperties corsProperties;
+    private final boolean developmentProfile;
 
-    public SecurityConfig(ObjectMapper objectMapper, CorsProperties corsProperties) {
+    public SecurityConfig(ObjectMapper objectMapper, CorsProperties corsProperties, Environment environment) {
         this.objectMapper = objectMapper;
         this.corsProperties = corsProperties;
+        this.developmentProfile = environment.acceptsProfiles(Profiles.of("dev"));
     }
 
     @Bean
@@ -51,22 +62,33 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-                                           JwtAuthenticationFilter jwtAuthenticationFilter,
-                                           AuthenticationConfiguration configuration) throws Exception {
+                                           JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
+                // Disabled because the API is stateless and authenticated by a bearer header: there
+                // is no ambient cookie credential for a forged request to ride on.
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(
-                                "/api/auth/register",
-                                "/api/auth/login",
-                                "/api/health",
-                                "/h2-console/**",
-                                "/error").permitAll()
-                        .anyRequest().authenticated())
+                .headers(headers -> {
+                    if (developmentProfile) {
+                        // The H2 console renders inside a frame; this is dev-only by construction.
+                        headers.frameOptions(frame -> frame.sameOrigin());
+                    } else {
+                        headers.frameOptions(frame -> frame.deny());
+                    }
+                })
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                            .requestMatchers(
+                                    "/api/auth/register",
+                                    "/api/auth/login",
+                                    "/api/health",
+                                    "/error").permitAll();
+                    if (developmentProfile) {
+                        auth.requestMatchers("/h2-console/**").permitAll();
+                    }
+                    auth.anyRequest().authenticated();
+                })
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint((request, response, ex) -> writeError(
                                 response, 401, "UNAUTHORIZED", "Authentication required", request.getRequestURI()))
@@ -92,6 +114,7 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With"));
         config.setExposedHeaders(List.of("Content-Disposition"));
+        // No cookies, no ambient credentials: the token travels in a header the attacker cannot set.
         config.setAllowCredentials(false);
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

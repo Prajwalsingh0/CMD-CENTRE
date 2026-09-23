@@ -25,9 +25,10 @@ server:
 
 app:
   jwt:
-    # Development default only. Every real environment MUST override JWT_SECRET.
-    # Minimum 32 bytes or the application refuses to start.
-    secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-0123456789abcdef}
+    # No default on purpose. A missing secret must be a startup failure, not a deployment that
+    # quietly signs tokens with a value that is published in this repository.
+    #   generate one with:  openssl rand -base64 48
+    secret: ${JWT_SECRET:}
     issuer: ai-command-center
     access-token-minutes: 120
   storage:
