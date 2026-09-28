@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../api/client';
-import { userApi } from '../api/endpoints';
+import { exportApi, userApi } from '../api/endpoints';
 import type { SkillResponse } from '../api/types';
 import { Badge } from '../components/Badge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -59,6 +59,20 @@ export function ProfilePage() {
       setSkillError(caught instanceof ApiError ? caught : new ApiError(0, 'UNKNOWN', 'Could not add the skill.'));
     } finally {
       setSavingSkill(false);
+    }
+  };
+
+  const [exporting, setExporting] = useState(false);
+
+  const downloadExport = async () => {
+    setExporting(true);
+    try {
+      await exportApi.downloadExport();
+      toast.success('Your data export is downloading');
+    } catch (caught) {
+      toast.failure('Could not build your export', caught instanceof ApiError ? caught.message : undefined);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -127,6 +141,18 @@ export function ProfilePage() {
                 {savingProfile ? 'Saving…' : 'Save profile'}
               </button>
             </form>
+
+            <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+
+            <h3 className="card__subtitle">Take your data with you</h3>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Downloads everything this workspace holds about you - goals, tasks, documents, their text,
+              job analyses, research, notifications and activity - as one JSON file. Passwords and
+              session secrets are never included.
+            </p>
+            <button type="button" className="btn" onClick={downloadExport} disabled={exporting}>
+              {exporting ? 'Preparing your export...' : 'Download my data'}
+            </button>
           </section>
 
           <section className="card">

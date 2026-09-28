@@ -1,4 +1,4 @@
-import { request } from './client';
+import { downloadFile, request } from './client';
 import type {
   AiActivityResponse,
   AiStatusResponse,
@@ -49,6 +49,11 @@ export const authApi = {
 
   logout: (body: { refreshToken: string }) =>
     request<void>('/api/auth/logout', { method: 'POST', body, anonymous: true }),
+};
+
+export const exportApi = {
+  /** Downloads every row the application holds about the signed-in user. */
+  downloadExport: () => downloadFile('/api/users/me/export'),
 };
 
 export const userApi = {

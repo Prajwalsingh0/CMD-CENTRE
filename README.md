@@ -296,6 +296,7 @@ The complete endpoint table, conventions and error envelope are in **[docs/API.m
 POST   /api/auth/register            POST   /api/auth/login           GET  /api/auth/me
 POST   /api/auth/refresh             POST   /api/auth/logout
 GET    /api/users/me                 PUT    /api/users/me             GET  /api/users/me/skills
+GET    /api/users/me/export          (downloads every row about you as JSON)
 GET    /api/goals                    POST   /api/goals
 GET    /api/tasks                    POST   /api/tasks               PATCH /api/tasks/{id}/status
 GET    /api/documents                POST   /api/documents           POST /api/documents/{id}/insights
@@ -517,10 +518,10 @@ Honest list, roughly in the order I would tackle it:
 5. **Real web research.** The research agent is deliberately honest about doing no live
    retrieval. Adding a search provider behind the same interface is the obvious next step.
 6. **Recursive goal hierarchies** and recurring tasks.
-7. **Export.** A GDPR-style export of every row this application holds about a user.
 
-Sessions now renew with rotating refresh tokens (see *Tokens* below), so that item has left the
-list: access tokens last 15 minutes and every renewal retires the token it used.
+Sessions now renew with rotating refresh tokens (see *Tokens* below), and **Export** has landed:
+`GET /api/users/me/export` returns every row the application holds about you, as a downloadable
+JSON document that states its own omissions.
 
 ---
 

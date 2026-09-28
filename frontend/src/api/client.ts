@@ -307,3 +307,54 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw error;
   }
 }
+/**
+ * Downloads a file from an authenticated endpoint.
+ *
+ * Separate from {@link request} because the response is a blob with a filename, not JSON - but it
+ * follows the same session rules: one renewal and one retry on a 401, and signing out only when
+ * that renewal fails.
+ */
+export async function downloadFile(path: string): Promise<void> {
+  const attempt = async (): Promise<Response> => {
+    const token = getToken();
+    try {
+      return await fetch(`${apiBaseUrl()}${path}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Is the backend running?', [], path);
+    }
+  };
+
+  let response = await attempt();
+  if (response.status === 401 && (await renewSession())) {
+    response = await attempt();
+  }
+
+  if (response.status === 401) {
+    expireSession();
+    throw new ApiError(401, 'UNAUTHORIZED', 'Your session has expired. Please sign in again.', [], path);
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, `HTTP_${response.status}`, defaultMessage(response.status), [], path);
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filenameFrom(response.headers.get('Content-Disposition')) ?? 'export.json';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+/** Reads the server's suggested file name, falling back to the caller's default. */
+function filenameFrom(header: string | null): string | null {
+  if (!header) {
+    return null;
+  }
+  const match = /filename="?([^";]+)"?/i.exec(header);
+  return match ? match[1] : null;
+}

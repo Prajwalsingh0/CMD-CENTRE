@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, SESSION_EXPIRED_EVENT, getRefreshToken, getToken, request, setSession, setToken } from '../api/client';
+import { ApiError, SESSION_EXPIRED_EVENT, downloadFile, getRefreshToken, getToken, request, setSession, setToken } from '../api/client';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -211,5 +211,94 @@ describe('session renewal', () => {
 
     const refreshAttempts = fetchMock.mock.calls.filter((call) => String(call[0]).includes('/api/auth/refresh'));
     expect(refreshAttempts).toHaveLength(0);
+  });
+});
+describe('file downloads', () => {
+  function fileResponse(disposition: string | null): Response {
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'Content-Disposition' ? disposition : null) },
+      blob: async () => new Blob(['{"account":{}}'], { type: 'application/json' }),
+    } as unknown as Response;
+  }
+
+  it('downloads a file with the suggested name and cleans up afterwards', async () => {
+    setToken('token-123');
+    const createObjectURL = vi.fn(() => 'blob:mock-url');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+
+    const clicked: string[] = [];
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push(`${this.download}|${this.href}`);
+      });
+
+    fetchMock.mockResolvedValue(fileResponse('attachment; filename="ai-command-center-export-2026-09-28.json"'));
+
+    await downloadFile('/api/users/me/export');
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer token-123');
+    expect(clicked).toEqual(['ai-command-center-export-2026-09-28.json|blob:mock-url']);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+
+    clickSpy.mockRestore();
+  });
+
+  it('falls back to a default name when the server suggests none', async () => {
+    setToken('token-123');
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:mock-url', revokeObjectURL: () => undefined });
+
+    const clicked: string[] = [];
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push(this.download);
+      });
+
+    fetchMock.mockResolvedValue(fileResponse(null));
+
+    await downloadFile('/api/users/me/export');
+
+    expect(clicked).toEqual(['export.json']);
+    clickSpy.mockRestore();
+  });
+
+  it('renews once and retries when a download is refused with 401', async () => {
+    setSession('stale-access', 'refresh-1');
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:mock-url', revokeObjectURL: () => undefined });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 401, headers: { get: () => null }, text: async () => '{}' } as unknown as Response)
+      .mockResolvedValueOnce(jsonResponse({ accessToken: 'fresh', refreshToken: 'r2' }))
+      .mockResolvedValueOnce(fileResponse('attachment; filename="export.json"'));
+
+    await downloadFile('/api/users/me/export');
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.filter((url) => url.includes('/api/auth/refresh'))).toHaveLength(1);
+    expect(urls.filter((url) => url.includes('/api/users/me/export'))).toHaveLength(2);
+
+    clickSpy.mockRestore();
+  });
+
+  it('ends the session when a download cannot be renewed', async () => {
+    setSession('stale-access', 'refresh-1');
+    const expired = vi.fn();
+    window.addEventListener(SESSION_EXPIRED_EVENT, expired);
+
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 401, headers: { get: () => null }, text: async () => '{}' } as unknown as Response)
+      .mockResolvedValueOnce({ ok: false, status: 401, headers: { get: () => null }, text: async () => '{}' } as unknown as Response);
+
+    await expect(downloadFile('/api/users/me/export')).rejects.toBeInstanceOf(ApiError);
+
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(getToken()).toBeNull();
+    window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
   });
 });

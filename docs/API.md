@@ -35,6 +35,7 @@ Conventions
 | GET | `/api/users/me/skills` | `SkillResponse[]`. |
 | POST | `/api/users/me/skills` | `{skill, level?, verified?}` → `201 SkillResponse`. |
 | DELETE | `/api/users/me/skills/{skillId}` | Remove a skill. |
+| GET | `/api/users/me/export` | Every row the application holds about the caller, as a JSON attachment. The payload lists its own omissions (password hash, session token hashes, derived chunk embeddings). |
 | GET | `/api/goals` | `?status=ACTIVE\|PAUSED\|COMPLETED\|ARCHIVED` → `GoalResponse[]`. |
 | POST | `/api/goals` | `{title, description?, deadline?, priority?, status?, notes?}`. |
 | GET | `/api/goals/{id}` | `GoalResponse` (progress derived from tasks). |
