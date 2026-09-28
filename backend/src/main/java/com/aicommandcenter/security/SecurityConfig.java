@@ -82,6 +82,11 @@ public class SecurityConfig {
                             .requestMatchers(
                                     "/api/auth/register",
                                     "/api/auth/login",
+                                    // Both are authenticated by the refresh token in the body,
+                                    // not by an access token: a session renews precisely when its
+                                    // access token is no longer usable.
+                                    "/api/auth/refresh",
+                                    "/api/auth/logout",
                                     "/api/health",
                                     "/error").permitAll();
                     if (developmentProfile) {

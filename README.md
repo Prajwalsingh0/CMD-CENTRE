@@ -294,6 +294,7 @@ The complete endpoint table, conventions and error envelope are in **[docs/API.m
 
 ```text
 POST   /api/auth/register            POST   /api/auth/login           GET  /api/auth/me
+POST   /api/auth/refresh             POST   /api/auth/logout
 GET    /api/users/me                 PUT    /api/users/me             GET  /api/users/me/skills
 GET    /api/goals                    POST   /api/goals
 GET    /api/tasks                    POST   /api/tasks               PATCH /api/tasks/{id}/status
@@ -475,9 +476,12 @@ operation — is in **[docs/SECURITY.md](docs/SECURITY.md)**. The properties tha
 
 * **Passwords.** BCrypt with a cost of 10. Plaintext is never stored, never logged, and there is
   no password field on any response DTO.
-* **Tokens.** HS256 with a secret from configuration; the application refuses to start if the
-  secret is shorter than 32 bytes. Issuer and expiry are both verified. A valid signature with an
-  unknown subject resolves to no principal rather than an error.
+* **Tokens.** HS256 access tokens last 15 minutes, with a secret from configuration; the
+  application refuses to start if the secret is shorter than 32 bytes. Issuer and expiry are both
+  verified, and a valid signature with an unknown subject resolves to no principal rather than an
+  error. Sessions stay alive through a refresh token that is **rotated on every use** - only its
+  SHA-256 hash is stored, the presented token dies with the call, and replaying a retired token
+  revokes its entire chain.
 * **Object-level authorisation.** Every lookup is `findById(...).filter(row -> row.userId ==
   callerId)`. A missing row and someone else's row are indistinguishable from outside — both 404.
 * **SQL injection.** All access is through Spring Data JPA: derived queries, criteria
@@ -508,13 +512,15 @@ Honest list, roughly in the order I would tackle it:
    thousand chunks, a linear scan stops being the right trade-off.
 3. **Streaming responses.** `AiService` returns complete strings; token streaming would improve
    perceived latency for chat and insights.
-4. **Refresh tokens.** Access tokens are long-lived (120 minutes) and there is no rotation.
-5. **OCR.** Scanned PDFs are correctly refused with an explanatory message rather than failing
+4. **OCR.** Scanned PDFs are correctly refused with an explanatory message rather than failing
    silently; adding OCR would make them usable.
-6. **Real web research.** The research agent is deliberately honest about doing no live
+5. **Real web research.** The research agent is deliberately honest about doing no live
    retrieval. Adding a search provider behind the same interface is the obvious next step.
-7. **Recursive goal hierarchies** and recurring tasks.
-8. **Export.** A GDPR-style export of every row this application holds about a user.
+6. **Recursive goal hierarchies** and recurring tasks.
+7. **Export.** A GDPR-style export of every row this application holds about a user.
+
+Sessions now renew with rotating refresh tokens (see *Tokens* below), so that item has left the
+list: access tokens last 15 minutes and every renewal retires the token it used.
 
 ---
 

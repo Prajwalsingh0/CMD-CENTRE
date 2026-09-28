@@ -41,6 +41,9 @@ export interface AuthResponse {
   accessToken: string;
   tokenType: string;
   expiresInSeconds: number;
+  /** Rotated on every refresh; the only long-lived half of a session. */
+  refreshToken: string;
+  refreshExpiresInSeconds: number;
   user: UserResponse;
 }
 

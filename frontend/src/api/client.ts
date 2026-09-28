@@ -61,6 +61,101 @@ export class ApiError extends Error {
 
 const TOKEN_KEY = 'aicc.accessToken';
 export const SESSION_EXPIRED_EVENT = 'aicc:session-expired';
+const REFRESH_TOKEN_KEY = 'aicc.refreshToken';
+
+export function getRefreshToken(): string | null {
+  try {
+    return window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setRefreshToken(token: string | null): void {
+  try {
+    if (token === null) {
+      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+    } else {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    }
+  } catch {
+    // Same reasoning as the access token: storage may be unavailable.
+  }
+}
+
+/** Replaces both halves of a session in one place. */
+export function setSession(accessToken: string, refreshToken: string): void {
+  setToken(accessToken);
+  setRefreshToken(refreshToken);
+}
+
+export function clearSession(): void {
+  clearToken();
+  setRefreshToken(null);
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Renews the session, at most once at a time.
+ *
+ * Single-flight matters for two reasons: a screen that fires several requests at once must not
+ * trigger several rotations (the backend answers a raced rotation with a 401 on purpose), and the
+ * rotated token has to be stored before any retry reads it.
+ */
+async function renewSession(): Promise<boolean> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  const attempt = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl()}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) {
+        return false;
+      }
+      const text = await response.text();
+      const data = (text.length > 0 ? safeParse(text) : null) as { accessToken?: string; refreshToken?: string } | null;
+      if (!data?.accessToken || !data?.refreshToken) {
+        return false;
+      }
+      setSession(data.accessToken, data.refreshToken);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  // Clear the slot only once this attempt settles, and only if nothing newer took it over.
+  // Clearing it from inside the async function would run before this assignment, leaving a
+  // resolved promise cached - which would silently stop every later renewal attempt.
+  refreshInFlight = attempt;
+  void attempt.finally(() => {
+    if (refreshInFlight === attempt) {
+      refreshInFlight = null;
+    }
+  });
+
+  return attempt;
+}
+
+function isRenewalPath(path: string): boolean {
+  return path.startsWith('/api/auth/refresh') || path.startsWith('/api/auth/logout');
+}
+
+function expireSession(): void {
+  clearSession();
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+}
 
 export function getToken(): string | null {
   try {
@@ -100,7 +195,7 @@ export interface RequestOptions {
   anonymous?: boolean;
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function perform<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, signal, anonymous = false } = options;
 
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -144,10 +239,6 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       Array.isArray(envelope.details) ? envelope.details : [],
       envelope.path ?? path,
     );
-    if (error.isUnauthorized && !anonymous) {
-      clearToken();
-      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
-    }
     throw error;
   }
 
@@ -179,4 +270,40 @@ function defaultMessage(status: number): string {
     return 'The server hit an unexpected problem.';
   }
   return 'The request could not be completed.';
+}
+
+/**
+ * The app's HTTP entry point.
+ *
+ * A 401 no longer means "signed out" straight away: when the call was authenticated and a refresh
+ * token is on hand, the session is renewed once and the call is replayed with the new access
+ * token. Only if that fails (or there is nothing to renew with) does the session end and the
+ * expiry event fire, so a screen can distinguish "renewed silently" from "signed out".
+ */
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  try {
+    return await perform<T>(path, options);
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.isUnauthorized &&
+      !options.anonymous &&
+      !isRenewalPath(path)
+    ) {
+      const renewed = await renewSession();
+      if (renewed) {
+        try {
+          return await perform<T>(path, options);
+        } catch (retryError) {
+          expireSession();
+          throw retryError;
+        }
+      }
+    }
+
+    if (error instanceof ApiError && error.isUnauthorized && !options.anonymous) {
+      expireSession();
+    }
+    throw error;
+  }
 }

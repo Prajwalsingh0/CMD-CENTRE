@@ -2,6 +2,7 @@ package com.aicommandcenter.user.service;
 
 import com.aicommandcenter.exception.BadRequestException;
 import com.aicommandcenter.exception.ConflictException;
+import com.aicommandcenter.exception.InvalidTokenException;
 import com.aicommandcenter.exception.ResourceNotFoundException;
 import com.aicommandcenter.security.JwtService;
 import com.aicommandcenter.user.dto.AuthResponse;
@@ -30,15 +31,18 @@ public class UserService {
     private final UserSkillRepository userSkillRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     public UserService(UserRepository userRepository,
                        UserSkillRepository userSkillRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.userSkillRepository = userSkillRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional
@@ -56,7 +60,7 @@ public class UserService {
         return issueToken(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String email = normalise(request.email());
         User user = userRepository.findByEmailIgnoreCase(email)
@@ -129,9 +133,37 @@ public class UserService {
         return new SkillResponse(skill.getId(), skill.getSkill(), skill.getLevel(), skill.isVerified(), skill.getSource());
     }
 
+    /**
+     * Exchanges a refresh token for a new access token, rotating the refresh token on the way
+     * through. A disabled account cannot renew a session even with a valid token.
+     *
+     * <p>{@code noRollbackFor}: a rejected refresh must still commit whatever the token service
+     * decided (in particular, a detected reuse has to leave the family revoked).</p>
+     */
+    @Transactional(noRollbackFor = InvalidTokenException.class)
+    public AuthResponse refresh(String presentedToken) {
+        RefreshTokenService.Rotation rotation = refreshTokenService.rotate(presentedToken);
+        User user = requireUser(rotation.userId());
+        if (!user.isEnabled()) {
+            throw new InvalidTokenException();
+        }
+        return issueAccess(user, rotation.token());
+    }
+
+    /** Revokes the presented refresh token. Idempotent, and silent about unknown tokens. */
+    @Transactional
+    public void logout(String presentedToken) {
+        refreshTokenService.revoke(presentedToken);
+    }
+
     private AuthResponse issueToken(User user) {
-        String token = jwtService.generateToken(user.getId(), user.getEmail());
-        return AuthResponse.bearer(token, jwtService.expiresInSeconds(), toResponse(user));
+        return issueAccess(user, refreshTokenService.issue(user.getId()));
+    }
+
+    private AuthResponse issueAccess(User user, String refreshToken) {
+        String accessToken = jwtService.generateToken(user.getId(), user.getEmail());
+        return AuthResponse.bearer(accessToken, jwtService.expiresInSeconds(),
+                refreshToken, refreshTokenService.refreshExpiresInSeconds(), toResponse(user));
     }
 
     private User requireUser(Long userId) {

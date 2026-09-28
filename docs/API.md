@@ -1,7 +1,8 @@
 # API reference
 
 Base URL: `http://localhost:8080`. All bodies are JSON unless stated.
-Every `/api/**` route except `POST /api/auth/register`, `POST /api/auth/login` and
+Every `/api/**` route except `POST /api/auth/register`, `POST /api/auth/login`,
+`POST /api/auth/refresh`, `POST /api/auth/logout` and
 `GET /api/health` requires `Authorization: Bearer <accessToken>`.
 
 Conventions
@@ -26,6 +27,8 @@ Conventions
 | GET | `/api/health` | Liveness + build/version info. Public. |
 | POST | `/api/auth/register` | `{email, password, displayName}` → `AuthResponse`. Public. |
 | POST | `/api/auth/login` | `{email, password}` → `AuthResponse`. Public. |
+| POST | `/api/auth/refresh` | `{refreshToken}` -> `AuthResponse`. Public. Rotates the token: the presented one stops working, a new one is returned. Unknown, expired, retired or reused tokens are all `401 INVALID_REFRESH_TOKEN`. |
+| POST | `/api/auth/logout` | `{refreshToken}` -> `204`. Revokes the token. Always 204, including for unknown tokens. |
 | GET | `/api/auth/me` | Current `UserResponse`. |
 | GET | `/api/users/me` | Profile incl. skills. |
 | PUT | `/api/users/me` | `{displayName?, headline?}` → `UserResponse`. |

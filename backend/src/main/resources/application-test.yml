@@ -12,6 +12,8 @@ spring:
 app:
   jwt:
     secret: test-secret-value-0123456789abcdef0123456789abcdef
+    access-token-minutes: 15
+    refresh-token-days: 14
   storage:
     location: ${java.io.tmpdir}/cmd-centre-test-uploads
   ai:

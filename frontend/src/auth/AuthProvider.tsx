@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { SESSION_EXPIRED_EVENT, clearToken, getToken, setToken } from '../api/client';
+import { SESSION_EXPIRED_EVENT, clearSession, getRefreshToken, getToken, setSession } from '../api/client';
 import { authApi } from '../api/endpoints';
 import type { UserResponse } from '../api/types';
 
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const restore = async () => {
-      if (!getToken()) {
+      if (!getToken() && !getRefreshToken()) {
         setInitialising(false);
         return;
       }
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(profile);
         }
       } catch {
-        clearToken();
+        clearSession();
       } finally {
         if (!cancelled) {
           setInitialising(false);
@@ -58,26 +58,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const onExpired = () => setUser(null);
+    const onExpired = () => {
+      clearSession();
+      setUser(null);
+    };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await authApi.login({ email, password });
-    setToken(response.accessToken);
+    setSession(response.accessToken, response.refreshToken);
     setUser(response.user);
   }, []);
 
   const register = useCallback(async (email: string, password: string, displayName: string) => {
     const response = await authApi.register({ email, password, displayName });
-    setToken(response.accessToken);
+    setSession(response.accessToken, response.refreshToken);
     setUser(response.user);
   }, []);
 
+  /**
+   * Clears the local session first so the UI reacts immediately, then tells the server to revoke
+   * the refresh token. The request is best effort: a failed revocation must not keep a user
+   * "signed in" on this device.
+   */
   const logout = useCallback(() => {
-    clearToken();
+    const refreshToken = getRefreshToken();
+    clearSession();
     setUser(null);
+    if (refreshToken) {
+      void authApi.logout({ refreshToken }).catch(() => undefined);
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(

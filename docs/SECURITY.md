@@ -44,6 +44,24 @@ alongside `me@x.com`.
 * `JwtAuthenticationFilter` never throws: an invalid token simply leaves the security context
   empty, and the entry point returns the standard 401 envelope.
 
+## 2b. Refresh tokens
+
+* A session outlives its access token through a rotating refresh token, not a long-lived bearer
+  token: access tokens last 15 minutes, refresh tokens 14 days.
+* Rows in `refresh_tokens` hold **only the SHA-256 hash**. A database dump replays nothing.
+* Every refresh retires the presented token and issues a successor in the same *family*.
+* **Reuse detection:** presenting a retired token revokes its whole family. The one exception is a
+  60-second grace window after rotation, where the token is refused but the family is kept alive -
+  a browser retry and a stolen token are indistinguishable at the moment of a race, and killing a
+  legitimate session on every retry would be a self-inflicted denial of service. Outside that
+  window the stolen chain dies with its replay.
+* Rotation is serialised with a row lock, so two simultaneous refreshes with the same token
+  produce exactly one winner and one refusal rather than two live successors.
+* A disabled account cannot renew: the subject is re-checked on the refresh path as well.
+* The revocation on the reuse path commits even though the request is rejected with a 401 -
+  `noRollbackFor` on the service methods is what keeps that control effective. Without it the
+  exception rolled the revocation back and the control silently did nothing.
+
 ## 3. Object-level authorisation (IDOR)
 
 The rule, applied without exception: a lookup is `findById(id)` followed by

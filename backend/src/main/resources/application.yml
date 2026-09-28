@@ -30,7 +30,11 @@ app:
     #   generate one with:  openssl rand -base64 48
     secret: ${JWT_SECRET:}
     issuer: ai-command-center
-    access-token-minutes: 120
+    # Paired with the refresh token below: the access token is deliberately short-lived because a
+    # rotated refresh token, not a long-lived bearer token, is what keeps a session alive.
+    access-token-minutes: ${ACCESS_TOKEN_MINUTES:15}
+    # How long a session can be renewed without signing in again.
+    refresh-token-days: ${REFRESH_TOKEN_DAYS:14}
   storage:
     location: ${APP_STORAGE_LOCATION:./data/uploads}
     max-file-size-bytes: ${APP_MAX_FILE_SIZE_BYTES:8388608}

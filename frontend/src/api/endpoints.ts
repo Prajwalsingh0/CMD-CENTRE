@@ -38,6 +38,17 @@ export const authApi = {
     request<AuthResponse>('/api/auth/login', { method: 'POST', body, anonymous: true }),
 
   me: () => request<UserResponse>('/api/auth/me'),
+
+  /**
+   * Anonymous on purpose: renewal happens precisely when the access token is useless, and the
+   * refresh token in the body is the credential. It also keeps a failed refresh from being
+   * treated as a retryable 401.
+   */
+  refresh: (body: { refreshToken: string }) =>
+    request<AuthResponse>('/api/auth/refresh', { method: 'POST', body, anonymous: true }),
+
+  logout: (body: { refreshToken: string }) =>
+    request<void>('/api/auth/logout', { method: 'POST', body, anonymous: true }),
 };
 
 export const userApi = {
