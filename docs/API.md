@@ -33,11 +33,11 @@ Conventions
 | POST | `/api/users/me/skills` | `{skill, level?, verified?}` → `201 SkillResponse`. |
 | DELETE | `/api/users/me/skills/{skillId}` | Remove a skill. |
 | GET | `/api/goals` | `?status=ACTIVE\|PAUSED\|COMPLETED\|ARCHIVED` → `GoalResponse[]`. |
-| POST | `/api/goals` | `{title, description?, deadline?, priority?, status?, notes?}`. |
+| POST | `/api/goals` | `{title, description?, deadline?, priority?, status?, notes?, parentGoalId?}`. A `parentGoalId` that belongs to another account, or that would create a cycle or a fourth level, is refused with `VALIDATION_FAILED`. |
 | GET | `/api/goals/{id}` | `GoalResponse` (progress derived from tasks). |
 | PUT | `/api/goals/{id}` | Partial merge of the same fields. |
 | POST | `/api/goals/{id}/refresh-status` | Auto-complete a goal whose tasks are all done. |
-| DELETE | `/api/goals/{id}` | Deletes the goal, **detaches** its tasks. |
+| DELETE | `/api/goals/{id}` | Deletes the goal, **detaches** its tasks. Refused with a `CONFLICT` while it still has sub-goals. |
 | GET | `/api/tasks` | `?status=&statuses=&priority=&goalId=&search=&dueBefore=&overdueOnly=&page=&size=&sort=` → `PageResponse<TaskResponse>`. |
 | GET | `/api/tasks/overdue` | `TaskResponse[]`. |
 | POST | `/api/tasks` | `{title, description?, status?, priority?, dueDate?, recurrence?, goalId?, tags?}`. A `recurrence` other than `NONE` requires a `dueDate` (400 otherwise); completing the task queues the next occurrence with the date advanced. |

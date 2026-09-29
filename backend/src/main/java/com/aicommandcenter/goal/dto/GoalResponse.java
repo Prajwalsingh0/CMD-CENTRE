@@ -20,6 +20,8 @@ public record GoalResponse(
         int progressPercent,
         boolean overdue,
         List<String> openTaskTitles,
+        Long parentGoalId,
+        long subGoalCount,
         Instant createdAt,
         Instant updatedAt) {
 }

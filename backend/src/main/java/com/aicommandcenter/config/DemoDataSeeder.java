@@ -84,7 +84,18 @@ public class DemoDataSeeder implements ApplicationRunner {
                 LocalDate.now().plusDays(30),
                 Priority.HIGH,
                 null,
+                null,
                 null)).id();
+
+        // One sub-goal, so a fresh install shows what a hierarchy looks like.
+        goalService.create(userId, new GoalRequest(
+                "Practise system design questions",
+                "The part of the job hunt that needs the most repetition.",
+                LocalDate.now().plusDays(14),
+                Priority.MEDIUM,
+                null,
+                null,
+                goalId));
 
         taskService.create(userId, new TaskRequest("Revise Spring Boot auto-configuration",
                 null, TaskStatus.COMPLETED, Priority.HIGH, LocalDate.now().minusDays(2), Recurrence.NONE, goalId, List.of("spring")));

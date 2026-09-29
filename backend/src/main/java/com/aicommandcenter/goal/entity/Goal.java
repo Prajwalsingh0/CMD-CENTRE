@@ -40,6 +40,10 @@ public class Goal {
 
     private LocalDate deadline;
 
+    /** The goal this one breaks down, or null for a top-level goal. */
+    @Column(name = "parent_goal_id")
+    private Long parentGoalId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Priority priority = Priority.MEDIUM;

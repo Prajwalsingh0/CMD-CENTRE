@@ -2,6 +2,7 @@ package com.aicommandcenter.goal.service;
 
 import com.aicommandcenter.common.enums.Priority;
 import com.aicommandcenter.exception.BadRequestException;
+import com.aicommandcenter.exception.ConflictException;
 import com.aicommandcenter.exception.ResourceNotFoundException;
 import com.aicommandcenter.goal.dto.GoalRequest;
 import com.aicommandcenter.goal.dto.GoalResponse;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -22,6 +24,12 @@ public class GoalService {
 
     /** Tasks that should be auto-completed when every task of a goal is done. */
     private static final List<TaskStatus> OPEN_STATUSES = List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS);
+
+    /** How deep the tree may go: a top-level goal, its sub-goals, and one level beneath those. */
+    private static final int MAX_DEPTH_LEVELS = 3;
+
+    /** Bound for the tree walks, so a corrupted chain can never spin forever. */
+    private static final int MAX_WALK = 50;
 
     private final GoalRepository goalRepository;
     private final TaskRepository taskRepository;
@@ -44,6 +52,8 @@ public class GoalService {
         goal.setPriority(request.priority() == null ? Priority.MEDIUM : request.priority());
         goal.setStatus(request.status() == null ? GoalStatus.ACTIVE : request.status());
         goal.setNotes(trimToNull(request.notes()));
+        goal.setParentGoalId(resolveParent(userId, request.parentGoalId(), null));
+        requireFitsInTree(userId, goal);
         return toResponse(goalRepository.save(goal));
     }
 
@@ -84,12 +94,24 @@ public class GoalService {
         if (request.notes() != null) {
             goal.setNotes(trimToNull(request.notes()));
         }
+        if (request.parentGoalId() != null) {
+            goal.setParentGoalId(resolveParent(userId, request.parentGoalId(), goal.getId()));
+        }
+        requireFitsInTree(userId, goal);
         return toResponse(goalRepository.save(goal));
     }
 
     @Transactional
     public void delete(Long userId, Long goalId) {
         Goal goal = require(userId, goalId);
+
+        // Deleting a parent would orphan or silently drop its sub-goals; make the user choose.
+        long children = goalRepository.countByUserIdAndParentGoalId(userId, goalId);
+        if (children > 0) {
+            throw new ConflictException("This goal has " + children + " sub-goal"
+                    + (children == 1 ? "" : "s") + "; move or delete them first");
+        }
+
         // Detach tasks instead of cascading the delete so the user never loses work silently.
         List<Task> tasks = taskRepository.findAllByUserIdAndGoalId(userId, goalId);
         tasks.forEach(task -> task.setGoalId(null));
@@ -110,6 +132,88 @@ public class GoalService {
             goal.setStatus(GoalStatus.COMPLETED);
         }
         return toResponse(goalRepository.save(goal));
+    }
+
+    /**
+     * Resolves the proposed parent, refusing anything that would corrupt the tree: a goal from
+     * another account, the goal itself, or one of its own descendants.
+     */
+    private Long resolveParent(Long userId, Long parentGoalId, Long movingGoalId) {
+        if (parentGoalId == null) {
+            return null;
+        }
+
+        Goal parent = goalRepository.findById(parentGoalId)
+                .filter(candidate -> candidate.getUserId().equals(userId))
+                .orElseThrow(() -> new BadRequestException("VALIDATION_FAILED", "That parent goal does not exist"));
+
+        if (movingGoalId != null) {
+            if (parentGoalId.equals(movingGoalId)) {
+                throw new BadRequestException("VALIDATION_FAILED", "A goal cannot be its own parent");
+            }
+            Long ancestor = parent.getParentGoalId();
+            int guard = 0;
+            while (ancestor != null && guard++ < MAX_WALK) {
+                if (ancestor.equals(movingGoalId)) {
+                    throw new BadRequestException("VALIDATION_FAILED",
+                            "That would place a goal inside its own sub-goal");
+                }
+                ancestor = goalRepository.findById(ancestor).map(Goal::getParentGoalId).orElse(null);
+            }
+        }
+
+        return parent.getId();
+    }
+
+    /** Edges above a goal (0 for a top-level goal). */
+    private int depthOf(Long userId, Long goalId) {
+        int depth = 0;
+        Long current = goalId;
+        while (current != null && depth < MAX_WALK) {
+            Goal goal = goalRepository.findById(current)
+                    .filter(candidate -> candidate.getUserId().equals(userId))
+                    .orElse(null);
+            if (goal == null) {
+                break;
+            }
+            current = goal.getParentGoalId();
+            if (current != null) {
+                depth++;
+            }
+        }
+        return depth;
+    }
+
+    /** Levels below a goal (0 when it has no sub-goals). */
+    private int heightOf(Long userId, Long goalId) {
+        int height = 0;
+        List<Long> frontier = List.of(goalId);
+        while (!frontier.isEmpty() && height < MAX_WALK) {
+            List<Long> next = new ArrayList<>();
+            for (Long id : frontier) {
+                goalRepository.findAllByUserIdAndParentGoalIdOrderByCreatedAtAsc(userId, id)
+                        .forEach(child -> next.add(child.getId()));
+            }
+            if (next.isEmpty()) {
+                break;
+            }
+            height++;
+            frontier = next;
+        }
+        return height;
+    }
+
+    /**
+     * The whole chain has to fit: what sits above the goal, plus the goal, plus everything that
+     * already hangs below it. Checking only the new parent would let a deep subtree slip in.
+     */
+    private void requireFitsInTree(Long userId, Goal goal) {
+        int above = goal.getParentGoalId() == null ? 0 : depthOf(userId, goal.getParentGoalId()) + 1;
+        int below = goal.getId() == null ? 0 : heightOf(userId, goal.getId());
+        if (above + below + 1 > MAX_DEPTH_LEVELS) {
+            throw new BadRequestException("VALIDATION_FAILED",
+                    "Goals can be nested " + MAX_DEPTH_LEVELS + " levels deep");
+        }
     }
 
     public Goal require(Long userId, Long goalId) {
@@ -153,9 +257,10 @@ public class GoalService {
         boolean overdue = goal.getDeadline() != null
                 && goal.getDeadline().isBefore(LocalDate.now())
                 && goal.getStatus() == GoalStatus.ACTIVE;
+        long subGoals = goalRepository.countByUserIdAndParentGoalId(goal.getUserId(), goal.getId());
         return new GoalResponse(goal.getId(), goal.getTitle(), goal.getDescription(), goal.getDeadline(),
                 goal.getPriority(), goal.getStatus(), goal.getNotes(), total, completed, percent, overdue,
-                openTitles, goal.getCreatedAt(), goal.getUpdatedAt());
+                openTitles, goal.getParentGoalId(), subGoals, goal.getCreatedAt(), goal.getUpdatedAt());
     }
 
     private static String trimToNull(String value) {

@@ -21,6 +21,8 @@ interface GoalForm {
   description: string;
   deadline: string;
   priority: Priority;
+  /** '' means a top-level goal. */
+  parentGoalId: string;
 }
 
 export function GoalsPage() {
@@ -29,7 +31,7 @@ export function GoalsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<ApiError | null>(null);
-  const [form, setForm] = useState<GoalForm>({ title: '', description: '', deadline: '', priority: 'MEDIUM' });
+  const [form, setForm] = useState<GoalForm>({ title: '', description: '', deadline: '', priority: 'MEDIUM', parentGoalId: '' });
   const [pendingDelete, setPendingDelete] = useState<GoalResponse | null>(null);
 
   const { data, loading, error, reload } = useAsync<GoalResponse[]>(() => goalApi.list(statusFilter), [statusFilter]);
@@ -45,10 +47,11 @@ export function GoalsPage() {
         description: form.description.trim() === '' ? null : form.description.trim(),
         deadline: form.deadline === '' ? null : form.deadline,
         priority: form.priority,
+        parentGoalId: form.parentGoalId === '' ? null : Number(form.parentGoalId),
       });
       toast.success('Goal created');
       setFormOpen(false);
-      setForm({ title: '', description: '', deadline: '', priority: 'MEDIUM' });
+      setForm({ title: '', description: '', deadline: '', priority: 'MEDIUM', parentGoalId: '' });
       reload();
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught : new ApiError(0, 'UNKNOWN', 'Could not create the goal.'));
@@ -128,6 +131,16 @@ export function GoalsPage() {
                 />
                 <div className="row" style={{ marginTop: 10 }}>
                   <Badge tone={priorityTone(goal.priority)}>{goal.priority}</Badge>
+                  {goal.parentGoalId ? (
+                    <Badge tone="info">
+                      sub-goal of {(data ?? []).find((candidate) => candidate.id === goal.parentGoalId)?.title ?? 'another goal'}
+                    </Badge>
+                  ) : null}
+                  {goal.subGoalCount > 0 ? (
+                    <Badge tone="neutral">
+                      {goal.subGoalCount} sub-goal{goal.subGoalCount === 1 ? '' : 's'}
+                    </Badge>
+                  ) : null}
                   <span className="small subtle">{goal.deadline ? `Due ${formatDate(goal.deadline)}` : 'No deadline'}</span>
                   {goal.overdue ? <Badge tone="danger">Past deadline</Badge> : null}
                 </div>
@@ -202,6 +215,22 @@ export function GoalsPage() {
                 value={form.deadline}
                 onChange={(event) => setForm({ ...form, deadline: event.target.value })}
               />
+            </div>
+            <div className="field">
+              <label htmlFor="goal-parent">Sub-goal of</label>
+              <select
+                id="goal-parent"
+                value={form.parentGoalId}
+                onChange={(event) => setForm({ ...form, parentGoalId: event.target.value })}
+              >
+                <option value="">Top-level goal</option>
+                {(data ?? []).map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.title}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">Goals nest up to three levels deep.</span>
             </div>
             <div className="field">
               <label htmlFor="goal-priority">Priority</label>

@@ -98,6 +98,7 @@ export const taskApi = {
   update: (id: number, body: Partial<{
     title: string;
     description: string | null;
+    parentGoalId: number | null;
     status: TaskStatus;
     priority: Priority;
     dueDate: string | null;
@@ -124,11 +125,13 @@ export const goalApi = {
     priority?: Priority;
     status?: GoalStatus;
     notes?: string | null;
+    parentGoalId?: number | null;
   }) => request<GoalResponse>('/api/goals', { method: 'POST', body }),
 
   update: (id: number, body: Partial<{
     title: string;
     description: string | null;
+    parentGoalId: number | null;
     deadline: string | null;
     priority: Priority;
     status: GoalStatus;

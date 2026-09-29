@@ -12,6 +12,11 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
 
     List<Goal> findAllByUserIdAndStatusOrderByCreatedAtDesc(Long userId, GoalStatus status);
 
+    /** Direct children of a goal, oldest first so a tree renders in creation order. */
+    List<Goal> findAllByUserIdAndParentGoalIdOrderByCreatedAtAsc(Long userId, Long parentGoalId);
+
+    long countByUserIdAndParentGoalId(Long userId, Long parentGoalId);
+
     long countByUserIdAndStatus(Long userId, GoalStatus status);
 
     List<Goal> findTop8ByUserIdAndStatusOrderByDeadlineAsc(Long userId, GoalStatus status);

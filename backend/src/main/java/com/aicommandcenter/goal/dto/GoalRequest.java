@@ -12,5 +12,7 @@ public record GoalRequest(
         LocalDate deadline,
         Priority priority,
         GoalStatus status,
-        @Size(max = 8000) String notes) {
+        @Size(max = 8000) String notes,
+        /** The goal this one breaks down. Null on update keeps the current parent. */
+        Long parentGoalId) {
 }

@@ -59,6 +59,10 @@ export interface GoalResponse {
   progressPercent: number;
   overdue: boolean;
   openTaskTitles: string[];
+  /** The goal this one breaks down, or null at the top level. */
+  parentGoalId: number | null;
+  /** Direct sub-goals, for showing a tree without walking it. */
+  subGoalCount: number;
   createdAt: string;
   updatedAt: string;
 }

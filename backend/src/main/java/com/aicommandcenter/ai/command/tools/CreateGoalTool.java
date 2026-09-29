@@ -39,7 +39,9 @@ public class CreateGoalTool implements CommandTool {
         args.rejectUnknown(allowedArguments());
         String title = args.require("title", 180);
         GoalRequest request = new GoalRequest(title, args.optional("description"), args.optionalDate("deadline"),
-                args.optionalPriority("priority"), GoalStatus.ACTIVE, null);
+                // The parser declares no parent argument, so goals the assistant creates are
+                // top-level; the null is explicit to keep that visible.
+                args.optionalPriority("priority"), GoalStatus.ACTIVE, null, null);
         GoalResponse goal = goalService.create(userId, request);
 
         List<String> steps = List.of(
