@@ -1,6 +1,7 @@
 package com.aicommandcenter.task.dto;
 
 import com.aicommandcenter.common.enums.Priority;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 import jakarta.validation.constraints.Size;
 
@@ -17,6 +18,7 @@ public record TaskRequest(
         TaskStatus status,
         Priority priority,
         LocalDate dueDate,
+        Recurrence recurrence,
         Long goalId,
         List<@Size(max = 40) String> tags) {
 }

@@ -7,6 +7,8 @@
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+/** Completing an occurrence of a repeating task queues the next one. */
+export type Recurrence = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 export type GoalStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ARCHIVED';
 export type DocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
 export type InsightOperation = 'SUMMARY' | 'KEY_POINTS' | 'NOTES' | 'QUESTIONS';
@@ -68,6 +70,7 @@ export interface TaskResponse {
   status: TaskStatus;
   priority: Priority;
   dueDate: string | null;
+  recurrence: Recurrence;
   goalId: number | null;
   goalTitle: string | null;
   tags: string[];

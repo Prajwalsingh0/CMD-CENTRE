@@ -513,7 +513,9 @@ Honest list, roughly in the order I would tackle it:
    silently; adding OCR would make them usable.
 6. **Real web research.** The research agent is deliberately honest about doing no live
    retrieval. Adding a search provider behind the same interface is the obvious next step.
-7. **Recursive goal hierarchies** and recurring tasks.
+7. **Recursive goal hierarchies.** Goals still form a flat list. Recurring tasks have landed:
+   a task can repeat daily, weekly or monthly, and completing one occurrence queues the next
+   with its due date advanced (month ends clamp rather than skip).
 8. **Export.** A GDPR-style export of every row this application holds about a user.
 
 ---

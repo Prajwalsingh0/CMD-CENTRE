@@ -4,6 +4,7 @@ import com.aicommandcenter.common.enums.Priority;
 import com.aicommandcenter.goal.dto.GoalRequest;
 import com.aicommandcenter.goal.service.GoalService;
 import com.aicommandcenter.task.dto.TaskRequest;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 import com.aicommandcenter.task.service.TaskService;
 import com.aicommandcenter.user.dto.RegisterRequest;
@@ -86,15 +87,15 @@ public class DemoDataSeeder implements ApplicationRunner {
                 null)).id();
 
         taskService.create(userId, new TaskRequest("Revise Spring Boot auto-configuration",
-                null, TaskStatus.COMPLETED, Priority.HIGH, LocalDate.now().minusDays(2), goalId, List.of("spring")));
+                null, TaskStatus.COMPLETED, Priority.HIGH, LocalDate.now().minusDays(2), Recurrence.NONE, goalId, List.of("spring")));
         taskService.create(userId, new TaskRequest("Practise SQL joins and indexes",
-                null, TaskStatus.IN_PROGRESS, Priority.HIGH, LocalDate.now(), goalId, List.of("sql")));
+                null, TaskStatus.IN_PROGRESS, Priority.HIGH, LocalDate.now(), Recurrence.WEEKLY, goalId, List.of("sql")));
         taskService.create(userId, new TaskRequest("Write the system-design walkthrough",
-                null, TaskStatus.TODO, Priority.MEDIUM, LocalDate.now().plusDays(3), goalId, List.of("design")));
+                null, TaskStatus.TODO, Priority.MEDIUM, LocalDate.now().plusDays(3), Recurrence.NONE, goalId, List.of("design")));
         taskService.create(userId, new TaskRequest("Review the security checklist",
-                null, TaskStatus.TODO, Priority.URGENT, LocalDate.now().minusDays(1), goalId, List.of("security")));
+                null, TaskStatus.TODO, Priority.URGENT, LocalDate.now().minusDays(1), Recurrence.NONE, goalId, List.of("security")));
         taskService.create(userId, new TaskRequest("Draft the take-home project README",
-                null, TaskStatus.TODO, Priority.LOW, LocalDate.now().plusDays(7), null, List.of("docs")));
+                null, TaskStatus.TODO, Priority.LOW, LocalDate.now().plusDays(7), Recurrence.NONE, null, List.of("docs")));
 
         log.info("Demo workspace ready. Sign in as {} / {}", DEMO_EMAIL, DEMO_PASSWORD);
     }

@@ -11,6 +11,7 @@ import com.aicommandcenter.goal.entity.GoalStatus;
 import com.aicommandcenter.goal.service.GoalService;
 import com.aicommandcenter.task.dto.TaskRequest;
 import com.aicommandcenter.task.dto.TaskResponse;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 import com.aicommandcenter.task.service.TaskService;
 import org.springframework.stereotype.Component;
@@ -90,6 +91,7 @@ public class CreateGoalWithPlanTool implements CommandTool {
                     TaskStatus.TODO,
                     day % 7 == 0 ? Priority.HIGH : Priority.MEDIUM,
                     today.plusDays(day),
+                    Recurrence.NONE,
                     goal.id(),
                     List.of("plan", "auto-generated"));
             tasks.add(taskService.create(userId, request));

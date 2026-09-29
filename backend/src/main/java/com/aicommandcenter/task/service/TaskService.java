@@ -8,6 +8,7 @@ import com.aicommandcenter.goal.repository.GoalRepository;
 import com.aicommandcenter.task.dto.TaskRequest;
 import com.aicommandcenter.task.dto.TaskResponse;
 import com.aicommandcenter.task.entity.Task;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 import com.aicommandcenter.task.repository.TaskRepository;
 import com.aicommandcenter.task.repository.TaskSpecifications;
@@ -53,8 +54,10 @@ public class TaskService {
         task.setStatus(request.status() == null ? TaskStatus.TODO : request.status());
         task.setPriority(request.priority() == null ? Priority.MEDIUM : request.priority());
         task.setDueDate(request.dueDate());
+        task.setRecurrence(request.recurrence() == null ? Recurrence.NONE : request.recurrence());
         task.setGoalId(resolveGoal(userId, request.goalId()));
         task.setTags(joinTags(request.tags()));
+        requireDueDateForRecurrence(task.getRecurrence(), task.getDueDate());
         if (task.getStatus() == TaskStatus.COMPLETED) {
             task.setCompletedAt(Instant.now());
         }
@@ -103,17 +106,29 @@ public class TaskService {
         if (request.dueDate() != null) {
             task.setDueDate(request.dueDate());
         }
+        if (request.recurrence() != null) {
+            task.setRecurrence(request.recurrence());
+        }
         if (request.goalId() != null) {
             task.setGoalId(resolveGoal(userId, request.goalId()));
         }
         if (request.tags() != null) {
             task.setTags(joinTags(request.tags()));
         }
+        requireDueDateForRecurrence(task.getRecurrence(), task.getDueDate());
+
+        boolean completedHere = false;
         if (request.status() != null && request.status() != task.getStatus()) {
+            completedHere = request.status() == TaskStatus.COMPLETED;
             task.setStatus(request.status());
-            task.setCompletedAt(request.status() == TaskStatus.COMPLETED ? Instant.now() : null);
+            task.setCompletedAt(completedHere ? Instant.now() : null);
         }
-        return toResponse(taskRepository.save(task), goalTitles(userId, List.of(task)));
+
+        Task saved = taskRepository.save(task);
+        if (completedHere) {
+            queueNextOccurrence(userId, saved);
+        }
+        return toResponse(saved, goalTitles(userId, List.of(saved)));
     }
 
     @Transactional
@@ -122,9 +137,52 @@ public class TaskService {
             throw new BadRequestException("VALIDATION_FAILED", "status is required");
         }
         Task task = require(userId, taskId);
+        boolean completedNow = task.getStatus() != TaskStatus.COMPLETED && status == TaskStatus.COMPLETED;
         task.setStatus(status);
         task.setCompletedAt(status == TaskStatus.COMPLETED ? Instant.now() : null);
-        return toResponse(taskRepository.save(task), goalTitles(userId, List.of(task)));
+
+        Task saved = taskRepository.save(task);
+        if (completedNow) {
+            queueNextOccurrence(userId, saved);
+        }
+        return toResponse(saved, goalTitles(userId, List.of(saved)));
+    }
+
+    /**
+     * Completing one occurrence of a recurring task puts the next one on the board.
+     *
+     * <p>Only the transition into COMPLETED queues a successor, and only when the task actually
+     * repeats and has a date to advance from - so re-saving a finished task, or clearing and
+     * re-completing it in the same request, cannot fan out duplicates.</p>
+     */
+    private void queueNextOccurrence(Long userId, Task completed) {
+        Recurrence recurrence = completed.getRecurrence();
+        if (recurrence == null || !recurrence.repeats()) {
+            return;
+        }
+        LocalDate nextDue = recurrence.next(completed.getDueDate());
+        if (nextDue == null) {
+            return;
+        }
+
+        Task next = new Task();
+        next.setUserId(userId);
+        next.setGoalId(completed.getGoalId());
+        next.setTitle(completed.getTitle());
+        next.setDescription(completed.getDescription());
+        next.setPriority(completed.getPriority());
+        next.setTags(completed.getTags());
+        next.setRecurrence(recurrence);
+        next.setStatus(TaskStatus.TODO);
+        next.setDueDate(nextDue);
+        taskRepository.save(next);
+    }
+
+    /** A series without a date to advance from cannot be scheduled, so reject it up front. */
+    private static void requireDueDateForRecurrence(Recurrence recurrence, LocalDate dueDate) {
+        if (recurrence != null && recurrence.repeats() && dueDate == null) {
+            throw new BadRequestException("VALIDATION_FAILED", "a recurring task needs a due date");
+        }
     }
 
     @Transactional
@@ -222,6 +280,7 @@ public class TaskService {
                 task.getStatus(),
                 task.getPriority(),
                 task.getDueDate(),
+                task.getRecurrence(),
                 task.getGoalId(),
                 task.getGoalId() == null ? null : goalTitles.get(task.getGoalId()),
                 splitTags(task.getTags()),

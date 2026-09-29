@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { goalApi, taskApi } from '../api/endpoints';
-import type { GoalResponse, PageResponse, Priority, TaskResponse, TaskStatus } from '../api/types';
+import type { GoalResponse, PageResponse, Priority, Recurrence, TaskResponse, TaskStatus } from '../api/types';
 import { Badge, priorityTone } from '../components/Badge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState, ErrorState, LoadingState } from '../components/LoadingState';
@@ -30,6 +30,7 @@ interface FormState {
   status: TaskStatus;
   priority: Priority;
   dueDate: string;
+  recurrence: Recurrence;
   goalId: string;
   tags: string;
 }
@@ -41,6 +42,7 @@ const emptyForm: FormState = {
   status: 'TODO',
   priority: 'MEDIUM',
   dueDate: '',
+  recurrence: 'NONE',
   goalId: '',
   tags: '',
 };
@@ -103,6 +105,7 @@ export function TasksPage() {
       status: task.status,
       priority: task.priority,
       dueDate: task.dueDate ?? '',
+      recurrence: task.recurrence ?? 'NONE',
       goalId: task.goalId ? String(task.goalId) : '',
       tags: task.tags.join(', '),
     });
@@ -114,12 +117,17 @@ export function TasksPage() {
     event.preventDefault();
     setSaving(true);
     setFormError(null);
+    if (form.recurrence !== 'NONE' && form.dueDate === '') {
+      setFormError(new ApiError(400, 'VALIDATION_FAILED', 'A repeating task needs a due date to repeat from.'));
+      return;
+    }
     const payload = {
       title: form.title.trim(),
       description: form.description.trim() === '' ? null : form.description.trim(),
       status: form.status,
       priority: form.priority,
       dueDate: form.dueDate === '' ? null : form.dueDate,
+      recurrence: form.recurrence,
       goalId: form.goalId === '' ? null : Number(form.goalId),
       tags: form.tags
         .split(',')
@@ -322,7 +330,12 @@ export function TasksPage() {
                       <td>
                         <Badge tone={priorityTone(task.priority)}>{task.priority}</Badge>
                       </td>
-                      <td>{task.dueDate ? formatDate(task.dueDate) : '—'}</td>
+                      <td>
+                        {task.dueDate ? formatDate(task.dueDate) : '-'}
+                        {task.recurrence && task.recurrence !== 'NONE' ? (
+                          <Badge tone="info">repeats {task.recurrence.toLowerCase()}</Badge>
+                        ) : null}
+                      </td>
                       <td>
                         {task.goalId ? <Link to={`/goals/${task.goalId}`}>{task.goalTitle ?? 'Goal'}</Link> : '—'}
                       </td>
@@ -474,6 +487,22 @@ export function TasksPage() {
               value={form.tags}
               onChange={(event) => setForm({ ...form, tags: event.target.value })}
             />
+          </div>
+          <div className="field">
+            <label htmlFor="task-recurrence">Repeats</label>
+            <select
+              id="task-recurrence"
+              value={form.recurrence}
+              onChange={(event) => setForm({ ...form, recurrence: event.target.value as Recurrence })}
+            >
+              <option value="NONE">Does not repeat</option>
+              <option value="DAILY">Every day</option>
+              <option value="WEEKLY">Every week</option>
+              <option value="MONTHLY">Every month</option>
+            </select>
+            <span className="muted">
+              Completing a repeating task puts the next occurrence on the board automatically.
+            </span>
           </div>
         </form>
       </Modal>

@@ -1,6 +1,7 @@
 package com.aicommandcenter.task.dto;
 
 import com.aicommandcenter.common.enums.Priority;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 
 import java.time.Instant;
@@ -14,6 +15,7 @@ public record TaskResponse(
         TaskStatus status,
         Priority priority,
         LocalDate dueDate,
+        Recurrence recurrence,
         Long goalId,
         String goalTitle,
         List<String> tags,

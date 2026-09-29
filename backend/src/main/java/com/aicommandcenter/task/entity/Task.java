@@ -52,6 +52,10 @@ public class Task {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Recurrence recurrence = Recurrence.NONE;
+
     /** Comma separated tag list kept portable across H2 and PostgreSQL. */
     @Column(length = 300)
     private String tags;

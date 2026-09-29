@@ -40,7 +40,7 @@ Conventions
 | DELETE | `/api/goals/{id}` | Deletes the goal, **detaches** its tasks. |
 | GET | `/api/tasks` | `?status=&statuses=&priority=&goalId=&search=&dueBefore=&overdueOnly=&page=&size=&sort=` → `PageResponse<TaskResponse>`. |
 | GET | `/api/tasks/overdue` | `TaskResponse[]`. |
-| POST | `/api/tasks` | `{title, description?, status?, priority?, dueDate?, goalId?, tags?}`. |
+| POST | `/api/tasks` | `{title, description?, status?, priority?, dueDate?, recurrence?, goalId?, tags?}`. A `recurrence` other than `NONE` requires a `dueDate` (400 otherwise); completing the task queues the next occurrence with the date advanced. |
 | GET | `/api/tasks/{id}` | `TaskResponse`. |
 | PUT | `/api/tasks/{id}` | Partial merge. |
 | PATCH | `/api/tasks/{id}/status` | `{status}` → `TaskResponse`. |

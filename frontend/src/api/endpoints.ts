@@ -1,5 +1,5 @@
 import { request } from './client';
-import type {
+import type { Recurrence,
   AiActivityResponse,
   AiStatusResponse,
   AnalyticsResponse,
@@ -90,6 +90,7 @@ export const taskApi = {
     status?: TaskStatus;
     priority?: Priority;
     dueDate?: string | null;
+  recurrence?: Recurrence;
     goalId?: number | null;
     tags?: string[];
   }) => request<TaskResponse>('/api/tasks', { method: 'POST', body }),

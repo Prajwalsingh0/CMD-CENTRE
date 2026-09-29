@@ -8,6 +8,7 @@ import com.aicommandcenter.exception.BadRequestException;
 import com.aicommandcenter.goal.service.GoalService;
 import com.aicommandcenter.task.dto.TaskRequest;
 import com.aicommandcenter.task.dto.TaskResponse;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 import com.aicommandcenter.task.service.TaskService;
 import org.springframework.stereotype.Component;
@@ -58,6 +59,9 @@ public class CreateTaskTool implements CommandTool {
                 TaskStatus.TODO,
                 args.optionalPriority("priority"),
                 args.optionalDate("dueDate"),
+                // Recurrence is not yet an argument the command parser declares, so tasks the
+                // assistant creates are one-off; the field is set explicitly to keep that obvious.
+                Recurrence.NONE,
                 goalId,
                 args.optionalList("tags"));
         TaskResponse task = taskService.create(userId, request);
