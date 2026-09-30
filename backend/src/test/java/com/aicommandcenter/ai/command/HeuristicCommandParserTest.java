@@ -24,6 +24,34 @@ class HeuristicCommandParserTest {
     }
 
     @Test
+    @DisplayName("repeat words become a recurrence argument and leave the title alone")
+    void recurrencePhrases() {
+        ParsedCommand weekly = parser.parse("Create a task to review pull requests every week on 2026-03-02");
+        assertThat(weekly.intent()).isEqualTo(CommandIntent.CREATE_TASK);
+        assertThat(weekly.arguments().get("recurrence")).isEqualTo("WEEKLY");
+        assertThat(weekly.arguments().get("dueDate")).isEqualTo("2026-03-02");
+        assertThat(weekly.arguments().get("title")).isEqualTo("review pull requests");
+
+        assertThat(parser.parse("Create a daily task to stand up").arguments().get("recurrence")).isEqualTo("DAILY");
+        assertThat(parser.parse("Create a task to pay rent every month").arguments().get("recurrence")).isEqualTo("MONTHLY");
+        assertThat(parser.parse("Create a weekly task to water the plants").arguments().get("recurrence")).isEqualTo("WEEKLY");
+
+        assertThat(parser.parse("Create a task to call the bank").arguments()).doesNotContainKey("recurrence");
+    }
+
+    @Test
+    @DisplayName("a sub-goal command names its parent goal")
+    void nestedGoalPhrases() {
+        ParsedCommand parsed = parser.parse(
+                "Create a sub-goal \"Mock interviews\" under the Java Interview Preparation goal");
+        assertThat(parsed.intent()).isEqualTo(CommandIntent.CREATE_GOAL);
+        assertThat(parsed.arguments().get("title")).isEqualTo("Mock interviews");
+        assertThat(parsed.arguments().get("parentGoalTitle")).isEqualTo("Java Interview Preparation");
+
+        assertThat(parser.parse("Create a goal to read more").arguments()).doesNotContainKey("parentGoalTitle");
+    }
+
+    @Test
     @DisplayName("priority words are turned into a priority argument")
     void priorityWords() {
         ParsedCommand parsed = parser.parse("Create an urgent task to fix the outage");

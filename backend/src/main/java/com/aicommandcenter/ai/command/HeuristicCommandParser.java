@@ -33,6 +33,14 @@ public class HeuristicCommandParser {
     private static final Pattern TOPIC = Pattern.compile(
             "research\\s*(?:on|about|into|:)?\\s*(.+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern TASK_ID = Pattern.compile("\\b(?:task|id)\\s*#?(\\d{1,9})\\b", Pattern.CASE_INSENSITIVE);
+    /** Removed from a title once the same words have been read as a recurrence rule. */
+    private static final Pattern RECURRENCE_PHRASE = Pattern.compile(
+            "(?i)\\b(every day|everyday|daily|each day|every week|weekly|each week|every month|monthly|each month)\\b");
+
+    /** The phrase that names the parent when a command asks for a nested goal. */
+    private static final Pattern GOAL_PARENT = Pattern.compile(
+            "\\b(?:under|inside|within|as part of|part of)\\s+(?:the\\s+)?(.+?)(?:\\s+goal)?\\s*$",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern DOC_NAME = Pattern.compile(
             "(?:document|file|resume|cv|pdf|notes?)\\s*(?:called|named|titled|:)?\\s*(.+)", Pattern.CASE_INSENSITIVE);
 
@@ -40,6 +48,23 @@ public class HeuristicCommandParser {
             "show", "list", "display", "what are", "what's", "whats", "give me", "tell me", "how many");
     private static final List<String> ACTION_PREFIXES = List.of(
             "create", "add", "make", "new", "remind", "set up", "schedule", "plan", "start");
+
+    /**
+     * Phrases that mean "this repeats". Checked longest first so "every day" is not read as a
+     * bare "day", and a repeat is only reported when the words really say so.
+     */
+    private static String detectRecurrence(String lower) {
+        if (containsAny(lower, "every day", "everyday", "daily", "each day")) {
+            return "DAILY";
+        }
+        if (containsAny(lower, "every week", "weekly", "each week")) {
+            return "WEEKLY";
+        }
+        if (containsAny(lower, "every month", "monthly", "each month")) {
+            return "MONTHLY";
+        }
+        return null;
+    }
 
     public ParsedCommand parse(String command) {
         if (command == null || command.isBlank()) {
@@ -106,8 +131,8 @@ public class HeuristicCommandParser {
 
         // 6. Multi-day plan.
         Integer horizon = DateHints.horizonDays(text);
-        if (containsAny(lower, "plan", "roadmap", "schedule")
-                && (horizon != null || containsAny(lower, "day", "week"))) {
+        if (containsWord(lower, "plan", "plans", "roadmap", "schedule")
+                && (horizon != null || containsWord(lower, "day", "days", "week", "weeks"))) {
             String focus = planFocus(text);
             Map<String, String> args = new LinkedHashMap<>();
             args.put("title", focus);
@@ -169,6 +194,22 @@ public class HeuristicCommandParser {
                 title = text.replaceAll("(?i)^.*?goal\\s*", "");
             }
             Map<String, String> args = new LinkedHashMap<>();
+
+            // "â€¦ sub-goal under the Job Hunt goal" nests it; the clause is removed from the title
+            // so the title is not left saying where it belongs.
+            if (containsAny(lower, "sub-goal", "subgoal", "sub goal")) {
+                Matcher parent = GOAL_PARENT.matcher(text);
+                if (parent.find()) {
+                    String parentTitle = cleanup(parent.group(1));
+                    if (!parentTitle.isEmpty()) {
+                        args.put("parentGoalTitle", parentTitle);
+                        if (title != null) {
+                            title = title.replace(parent.group(0), " ");
+                        }
+                    }
+                }
+            }
+
             args.put("title", cleanup(title));
             String deadline = DateHints.resolve(text);
             if (deadline != null) {
@@ -187,10 +228,14 @@ public class HeuristicCommandParser {
                 title = stripActionPrefix(text);
             }
             Map<String, String> args = new LinkedHashMap<>();
-            args.put("title", cleanup(stripTemporal(title)));
+            args.put("title", cleanup(stripTemporal(RECURRENCE_PHRASE.matcher(title).replaceAll(" "))));
             String due = DateHints.resolve(text);
             if (due != null) {
                 args.put("dueDate", due);
+            }
+            String recurrence = detectRecurrence(lower);
+            if (recurrence != null) {
+                args.put("recurrence", recurrence);
             }
             if (lower.contains("urgent") || lower.contains("critical")) {
                 args.put("priority", "URGENT");
@@ -221,6 +266,19 @@ public class HeuristicCommandParser {
     private static boolean containsAny(String haystack, String... needles) {
         for (String needle : needles) {
             if (haystack.contains(needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whole-word variant of {@link #containsAny}, for keywords short enough to appear inside other
+     * words: "plants" must not be read as "plan", nor "weekly" as "week".
+     */
+    private static boolean containsWord(String lower, String... words) {
+        for (String word : words) {
+            if (Pattern.compile("\\b" + Pattern.quote(word) + "\\b").matcher(lower).find()) {
                 return true;
             }
         }
@@ -282,6 +340,8 @@ public class HeuristicCommandParser {
         return value.replaceAll("(?i)\\b(today|tomorrow|tonight|next week|next month|"
                 + "in \\d{1,3} (days?|weeks?)|on (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"
                 + "by (monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b", "")
+                // A date the user typed outright belongs in the due date, not in the title
+                .replaceAll("(?i)\\b(on|by|due|at)?\\s*\\d{4}-\\d{2}-\\d{2}\\b", "")
                 .replaceAll("\\s{2,}", " ").trim();
     }
 

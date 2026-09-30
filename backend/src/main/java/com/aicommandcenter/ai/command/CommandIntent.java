@@ -13,10 +13,10 @@ import java.util.Set;
  */
 public enum CommandIntent {
 
-    CREATE_TASK("Create a single task",
-            Set.of("title", "description", "dueDate", "priority", "goalTitle", "tags")),
-    CREATE_GOAL("Create a goal",
-            Set.of("title", "description", "deadline", "priority")),
+    CREATE_TASK("Create a single task (recurrence repeats it once an occurrence is completed)",
+            Set.of("title", "description", "dueDate", "recurrence", "priority", "goalTitle", "tags")),
+    CREATE_GOAL("Create a goal, optionally nested under another goal",
+            Set.of("title", "description", "deadline", "priority", "parentGoalTitle")),
     CREATE_GOAL_WITH_PLAN("Create a goal together with a day-by-day task plan",
             Set.of("title", "days", "focus", "deadline", "priority")),
     LIST_TASKS("List the user's tasks, optionally filtered",

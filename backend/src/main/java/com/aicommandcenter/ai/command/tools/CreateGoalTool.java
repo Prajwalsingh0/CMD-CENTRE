@@ -4,6 +4,7 @@ import com.aicommandcenter.ai.command.CommandArgs;
 import com.aicommandcenter.ai.command.CommandIntent;
 import com.aicommandcenter.ai.command.CommandTool;
 import com.aicommandcenter.ai.command.ToolResult;
+import com.aicommandcenter.exception.BadRequestException;
 import com.aicommandcenter.goal.dto.GoalRequest;
 import com.aicommandcenter.goal.dto.GoalResponse;
 import com.aicommandcenter.goal.entity.GoalStatus;
@@ -38,10 +39,18 @@ public class CreateGoalTool implements CommandTool {
     public ToolResult execute(Long userId, CommandArgs args) {
         args.rejectUnknown(allowedArguments());
         String title = args.require("title", 180);
+
+        Long parentGoalId = null;
+        String parentGoalTitle = args.optional("parentGoalTitle");
+        if (parentGoalTitle != null) {
+            parentGoalId = goalService.findIdByTitle(userId, parentGoalTitle);
+            if (parentGoalId == null) {
+                throw new BadRequestException("GOAL_NOT_FOUND", "No goal matches '" + parentGoalTitle + "'");
+            }
+        }
+
         GoalRequest request = new GoalRequest(title, args.optional("description"), args.optionalDate("deadline"),
-                // The parser declares no parent argument, so goals the assistant creates are
-                // top-level; the null is explicit to keep that visible.
-                args.optionalPriority("priority"), GoalStatus.ACTIVE, null, null);
+                args.optionalPriority("priority"), GoalStatus.ACTIVE, null, parentGoalId);
         GoalResponse goal = goalService.create(userId, request);
 
         List<String> steps = List.of(

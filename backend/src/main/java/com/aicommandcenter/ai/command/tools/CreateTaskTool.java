@@ -59,9 +59,9 @@ public class CreateTaskTool implements CommandTool {
                 TaskStatus.TODO,
                 args.optionalPriority("priority"),
                 args.optionalDate("dueDate"),
-                // Recurrence is not yet an argument the command parser declares, so tasks the
-                // assistant creates are one-off; the field is set explicitly to keep that obvious.
-                Recurrence.NONE,
+                // A recurrence without a due date is refused by the service, with a message the
+                // user can act on, rather than being quietly dropped here.
+                args.optionalRecurrence("recurrence") == null ? Recurrence.NONE : args.optionalRecurrence("recurrence"),
                 goalId,
                 args.optionalList("tags"));
         TaskResponse task = taskService.create(userId, request);

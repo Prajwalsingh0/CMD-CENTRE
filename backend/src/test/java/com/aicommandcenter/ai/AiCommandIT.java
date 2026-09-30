@@ -43,6 +43,92 @@ class AiCommandIT extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("a repeat word in a command creates a recurring task")
+    void recurringTaskCommand() throws Exception {
+        String token = newUserToken();
+
+        post("/api/ai/command", token, java.util.Map.of(
+                "command", "Create a task to review pull requests every week on 2026-03-02"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.intent").value("CREATE_TASK"));
+
+        get("/api/tasks?search=review", token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].title").value("review pull requests"))
+                .andExpect(jsonPath("$.items[0].recurrence").value("WEEKLY"))
+                .andExpect(jsonPath("$.items[0].dueDate").value("2026-03-02"));
+    }
+
+    @Test
+    @DisplayName("a repeating task without a date is refused rather than silently made one-off")
+    void recurringTaskWithoutDateIsRefused() throws Exception {
+        String token = newUserToken();
+
+        post("/api/ai/command", token, java.util.Map.of(
+                "command", "Create a weekly task to water the plants"))
+                .andExpect(status().isOk())
+                // REJECTED, not FAILED: the argument is refused before anything runs
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        get("/api/tasks?search=plants", token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+    }
+
+    @Test
+    @DisplayName("a sub-goal command nests the new goal under the named one")
+    void nestedGoalCommand() throws Exception {
+        String token = newUserToken();
+
+        post("/api/ai/command", token, java.util.Map.of(
+                "command", "Create a goal \"Java Interview Preparation\""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"));
+
+        post("/api/ai/command", token, java.util.Map.of(
+                "command", "Create a sub-goal \"Mock interviews\" under the Java Interview Preparation goal"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.intent").value("CREATE_GOAL"));
+
+        var goals = bodyOf(get("/api/goals", token).andExpect(status().isOk()));
+        long parentId = 0;
+        long childId = 0;
+        long parentGoalId = 0;
+        for (var goal : goals) {
+            if ("Java Interview Preparation".equals(goal.path("title").asText())) {
+                parentId = goal.path("id").asLong();
+            }
+            if ("Mock interviews".equals(goal.path("title").asText())) {
+                childId = goal.path("id").asLong();
+                parentGoalId = goal.path("parentGoalId").asLong();
+            }
+        }
+
+        assertThat(parentId).isPositive();
+        assertThat(childId).isPositive();
+        assertThat(parentGoalId).isEqualTo(parentId);
+    }
+
+    @Test
+    @DisplayName("a sub-goal command naming an unknown goal reports the miss and creates nothing")
+    void nestedGoalCommandWithUnknownParent() throws Exception {
+        String token = newUserToken();
+
+        post("/api/ai/command", token, java.util.Map.of(
+                "command", "Create a sub-goal \"Orphan\" under the Nonexistent Programme goal"))
+                .andExpect(status().isOk())
+                // An unknown parent is a rejected argument, not a mid-flight failure
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        get("/api/goals", token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
     @DisplayName("a 14-day plan command creates a goal plus fourteen dated tasks")
     void planCommandCreatesRealWork() throws Exception {
         String token = newUserToken();

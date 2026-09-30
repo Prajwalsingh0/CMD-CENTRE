@@ -2,6 +2,7 @@ package com.aicommandcenter.ai.command;
 
 import com.aicommandcenter.common.enums.Priority;
 import com.aicommandcenter.exception.BadRequestException;
+import com.aicommandcenter.task.entity.Recurrence;
 import com.aicommandcenter.task.entity.TaskStatus;
 
 import java.time.LocalDate;
@@ -143,6 +144,19 @@ public class CommandArgs {
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException("INVALID_ARGUMENT",
                     "'" + key + "' must be one of TODO, IN_PROGRESS, COMPLETED, CANCELLED");
+        }
+    }
+
+    public Recurrence optionalRecurrence(String key) {
+        String value = optional(key);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Recurrence.valueOf(value.trim().toUpperCase(Locale.ROOT).replace(' ', '_'));
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("INVALID_ARGUMENT",
+                    "'" + key + "' must be one of NONE, DAILY, WEEKLY, MONTHLY");
         }
     }
 
